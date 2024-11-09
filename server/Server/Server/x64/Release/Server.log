@@ -1,0 +1,10 @@
+﻿  server.cpp
+C:\Users\PCs\Desktop\Projects\Networking-Project-Semester-3\server\Server\Server\server.cpp(105,71): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+  Generating code
+  1 of 95 functions ( 1.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    1 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Server.vcxproj -> C:\Users\PCs\Desktop\Projects\Networking-Project-Semester-3\server\Server\x64\Release\Server.exe
+  'pwsh.exe' is not recognized as an internal or external command,
+  operable program or batch file.
