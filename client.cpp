@@ -243,13 +243,13 @@ int main() {
             if (processedMessageIds.find(messageId) == processedMessageIds.end() && isAdmin(accessToken, senderEmail, messageId)) {
 
                 std::string emailContent = getEmail(accessToken, messageId);
-                std::cout << "ADMIN's message: " << emailContent << std::endl;
+                std::cout << "ADMIN's message: \n" << emailContent << std::endl;
                 processedMessageIds.insert(messageId);
 
 
                 std::string response;
                 sendRequest(emailContent, response);
-                std::cout << "SERVER's respone: " << response << std::endl;
+                std::cout << "SERVER's respone: \n" << response << std::endl;
 
                 sendEmail(accessToken, "hieunguyen.jc@gmail.com", "Command Result", response);
             }
