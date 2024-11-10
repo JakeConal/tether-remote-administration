@@ -16,7 +16,7 @@
 using json = nlohmann::json;
 
 std::string base64_encode(const std::string& input) {
-    static const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string encoded;
     int val = 0, valb = -6;
     for (unsigned char c : input) {
@@ -33,7 +33,7 @@ std::string base64_encode(const std::string& input) {
 }
 
 std::string base64_decode(const std::string& input) {
-    static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::vector<int> T(256, -1);
     for (int i = 0; i < 64; i++) T[base64_chars[i]] = i;
 
@@ -75,10 +75,10 @@ void sendEmail(const std::string& accessToken, const std::string& to, const std:
                     {"Content-Type", "application/json"} },
         cpr::Body{ rawMessage });
     if (r.status_code != 200) {
-        std::cerr << "Failed to send email: " << r.status_code << std::endl;
+        std::cerr << "Failed to send result to ADMIN: " << r.status_code << std::endl;
     }
     else {
-        std::cout << "Email sent successfully" << std::endl;
+        std::cout << "Result sent to ADMIN successfully" << std::endl;
     }
 }
 
@@ -127,7 +127,77 @@ bool isAdmin(const std::string& accessToken, const std::string& senderEmail, con
 }
 
 void send_request(const std::string& server, const std::string& request, std::string& response) {
-    //Socket programming
+    WSADATA wsaData;
+    SOCKET ConnectSocket = INVALID_SOCKET;
+    struct addrinfo* result = NULL, * ptr = NULL, hints;
+    char recvbuf[DEFAULT_BUFLEN];
+    int iResult;
+    int recvbuflen = DEFAULT_BUFLEN;
+
+    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        std::cerr << "WSAStartup failed: " << iResult << std::endl;
+        return;
+    }
+
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    iResult = getaddrinfo(server.c_str(), DEFAULT_PORT, &hints, &result);
+    if (iResult != 0) {
+        std::cerr << "getaddrinfo failed: " << iResult << std::endl;
+        WSACleanup();
+        return;
+    }
+
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+        ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        if (ConnectSocket == INVALID_SOCKET) {
+            std::cerr << "socket failed: " << WSAGetLastError() << std::endl;
+            WSACleanup();
+            return;
+        }
+
+        iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
+        if (iResult == SOCKET_ERROR) {
+            closesocket(ConnectSocket);
+            ConnectSocket = INVALID_SOCKET;
+            continue;
+        }
+        break;
+    }
+
+    freeaddrinfo(result);
+
+    if (ConnectSocket == INVALID_SOCKET) {
+        std::cerr << "Unable to connect to server!" << std::endl;
+        WSACleanup();
+        return;
+    }
+
+    iResult = send(ConnectSocket, request.c_str(), request.length(), 0);
+    if (iResult == SOCKET_ERROR) {
+        std::cerr << "send failed: " << WSAGetLastError() << std::endl;
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return;
+    }
+
+    iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+    if (iResult > 0) {
+        response = std::string(recvbuf, iResult);
+    }
+    else if (iResult == 0) {
+        std::cout << "Connection closed" << std::endl;
+    }
+    else {
+        std::cerr << "recv failed: " << WSAGetLastError() << std::endl;
+    }
+
+    closesocket(ConnectSocket);
+    WSACleanup();
 }
 
 int main() {
@@ -143,26 +213,26 @@ int main() {
         processedMessageIds.insert(messageId);
 
         while (true) {
-            
+
             messageId = getMessageId(accessToken);
 
             if (processedMessageIds.find(messageId) == processedMessageIds.end() && isAdmin(accessToken, senderEmail, messageId)) {
+
                 std::string emailContent = getEmail(accessToken, messageId);
-
-                std::cout << emailContent << std::endl;
-
+                std::cout << "ADMIN's message: " << emailContent << std::endl;
                 processedMessageIds.insert(messageId);
 
-              
-                //std::string response;
-                //send_request("127.0.0.1", emailContent, response);
 
-                //sendEmail(accessToken, "hieunguyen.jc@gmail.com", "Command Result", response);*/
+                std::string response;
+                send_request("127.0.0.1", emailContent, response);
+                std::cout << "SERVER's respone: " << response << std::endl;
+
+                sendEmail(accessToken, "hieunguyen.jc@gmail.com", "Command Result", response);
             }
         }
     }
     else {
-        std::cerr << "Error" << std::endl;
+        std::cerr << "ERROR" << std::endl;
     }
 
     return 0;
