@@ -126,42 +126,59 @@ bool isAdmin(const std::string& accessToken, const std::string& senderEmail, con
     return false;
 }
 
-void send_request(const std::string& server, const std::string& request, std::string& response) {
+void sendRequest(std::string& request, std::string& response)
+{
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
     struct addrinfo* result = NULL, * ptr = NULL, hints;
-    char recvbuf[DEFAULT_BUFLEN];
     int iResult;
+    char recvbuf[DEFAULT_BUFLEN];
     int recvbuflen = DEFAULT_BUFLEN;
 
+    // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != 0) {
-        std::cerr << "WSAStartup failed: " << iResult << std::endl;
+    if (iResult != 0)
+    {
+        std::cerr << "WSAStartup failed with error: " << iResult << std::endl;
         return;
     }
 
     ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    iResult = getaddrinfo(server.c_str(), DEFAULT_PORT, &hints, &result);
-    if (iResult != 0) {
-        std::cerr << "getaddrinfo failed: " << iResult << std::endl;
+    // Get server address from user input
+    std::string addr;
+    std::cout << "Enter server IP address: ";
+    std::getline(std::cin, addr);
+    const char* serverAddress = addr.c_str();
+
+    // Resolve the server address and port
+    iResult = getaddrinfo(serverAddress, DEFAULT_PORT, &hints, &result);
+    if (iResult != 0)
+    {
+        std::cerr << "getaddrinfo failed with error: " << iResult << std::endl;
         WSACleanup();
         return;
     }
 
-    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+    // Attempt to connect to the first result
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
+    {
+        // Create a socket for connecting to server
         ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-        if (ConnectSocket == INVALID_SOCKET) {
-            std::cerr << "socket failed: " << WSAGetLastError() << std::endl;
+        if (ConnectSocket == INVALID_SOCKET)
+        {
+            std::cerr << "Socket failed with error: " << WSAGetLastError() << std::endl;
             WSACleanup();
             return;
         }
 
+        // Connect to server
         iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
-        if (iResult == SOCKET_ERROR) {
+        if (iResult == SOCKET_ERROR)
+        {
             closesocket(ConnectSocket);
             ConnectSocket = INVALID_SOCKET;
             continue;
@@ -171,11 +188,15 @@ void send_request(const std::string& server, const std::string& request, std::st
 
     freeaddrinfo(result);
 
-    if (ConnectSocket == INVALID_SOCKET) {
+    if (ConnectSocket == INVALID_SOCKET)
+    {
         std::cerr << "Unable to connect to server!" << std::endl;
         WSACleanup();
         return;
     }
+
+    //------------------------------------
+    // Change the code here
 
     iResult = send(ConnectSocket, request.c_str(), request.length(), 0);
     if (iResult == SOCKET_ERROR) {
@@ -196,6 +217,9 @@ void send_request(const std::string& server, const std::string& request, std::st
         std::cerr << "recv failed: " << WSAGetLastError() << std::endl;
     }
 
+    //--------------------------------------
+
+    // Cleanup
     closesocket(ConnectSocket);
     WSACleanup();
 }
@@ -224,7 +248,7 @@ int main() {
 
 
                 std::string response;
-                send_request("127.0.0.1", emailContent, response);
+                sendRequest(emailContent, response);
                 std::cout << "SERVER's respone: " << response << std::endl;
 
                 sendEmail(accessToken, "hieunguyen.jc@gmail.com", "Command Result", response);
