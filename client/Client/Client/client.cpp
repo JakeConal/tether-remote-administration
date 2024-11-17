@@ -13,7 +13,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #define DEFAULT_PORT "12345"
-#define DEFAULT_BUFLEN 512
+#define DEFAULT_BUFLEN 1024
 
 /*------------------------------------------------------------------------------------------------------------
 
@@ -23,9 +23,9 @@
 
 using json = nlohmann::json;
 
-std::string base64_encode(const std::string &input)
+std::string base64_encode(const std::string& input)
 {
-    static const char *base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string encoded;
     int val = 0, valb = -6;
     for (unsigned char c : input)
@@ -45,7 +45,7 @@ std::string base64_encode(const std::string &input)
     return encoded;
 }
 
-std::string base64_decode(const std::string &input)
+std::string base64_decode(const std::string& input)
 {
     static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::vector<int> T(256, -1);
@@ -69,13 +69,13 @@ std::string base64_decode(const std::string &input)
     return decoded;
 }
 
-std::string getAccessToken(const std::string &refreshToken, const std::string &clientId, const std::string &clientSecret)
+std::string getAccessToken(const std::string& refreshToken, const std::string& clientId, const std::string& clientSecret)
 {
-    cpr::Response r = cpr::Post(cpr::Url{"https://oauth2.googleapis.com/token"},
-                                cpr::Payload{{"client_id", clientId},
-                                             {"client_secret", clientSecret},
-                                             {"refresh_token", refreshToken},
-                                             {"grant_type", "refresh_token"}});
+    cpr::Response r = cpr::Post(cpr::Url{ "https://oauth2.googleapis.com/token" },
+        cpr::Payload{ {"client_id", clientId},
+                     {"client_secret", clientSecret},
+                     {"refresh_token", refreshToken},
+                     {"grant_type", "refresh_token"} });
     if (r.status_code != 200)
     {
         std::cerr << "Failed to get access token: " << r.status_code << std::endl;
@@ -86,15 +86,15 @@ std::string getAccessToken(const std::string &refreshToken, const std::string &c
     return jsonData["access_token"].get<std::string>();
 }
 
-void sendEmail(const std::string &accessToken, const std::string &to, const std::string &subject, const std::string &body)
+void sendEmail(const std::string& accessToken, const std::string& to, const std::string& subject, const std::string& body)
 {
     std::string email = "From: jakeva123kl@gmail.com\r\nTo: " + to + "\r\nSubject: " + subject + "\r\n\r\n" + body;
     std::string rawMessage = "{\"raw\": \"" + base64_encode(email) + "\"}";
 
-    cpr::Response r = cpr::Post(cpr::Url{"https://www.googleapis.com/gmail/v1/users/me/messages/send"},
-                                cpr::Header{{"Authorization", "Bearer " + accessToken},
-                                            {"Content-Type", "application/json"}},
-                                cpr::Body{rawMessage});
+    cpr::Response r = cpr::Post(cpr::Url{ "https://www.googleapis.com/gmail/v1/users/me/messages/send" },
+        cpr::Header{ {"Authorization", "Bearer " + accessToken},
+                    {"Content-Type", "application/json"} },
+        cpr::Body{ rawMessage });
     if (r.status_code != 200)
     {
         std::cerr << "Failed to send email: " << r.status_code << std::endl;
@@ -105,10 +105,10 @@ void sendEmail(const std::string &accessToken, const std::string &to, const std:
     }
 }
 
-std::string getEmail(const std::string &accessToken, const std::string &messageId)
+std::string getEmail(const std::string& accessToken, const std::string& messageId)
 {
-    cpr::Response r = cpr::Get(cpr::Url{"https://www.googleapis.com/gmail/v1/users/me/messages/" + messageId},
-                               cpr::Header{{"Authorization", "Bearer " + accessToken}});
+    cpr::Response r = cpr::Get(cpr::Url{ "https://www.googleapis.com/gmail/v1/users/me/messages/" + messageId },
+        cpr::Header{ {"Authorization", "Bearer " + accessToken} });
     if (r.status_code != 200)
     {
         std::cerr << "Failed to get email: " << r.status_code << std::endl;
@@ -122,10 +122,10 @@ std::string getEmail(const std::string &accessToken, const std::string &messageI
     }
 }
 
-std::string listEmails(const std::string &accessToken)
+std::string listEmails(const std::string& accessToken)
 {
-    cpr::Response r = cpr::Get(cpr::Url{"https://www.googleapis.com/gmail/v1/users/me/messages"},
-                               cpr::Header{{"Authorization", "Bearer " + accessToken}});
+    cpr::Response r = cpr::Get(cpr::Url{ "https://www.googleapis.com/gmail/v1/users/me/messages" },
+        cpr::Header{ {"Authorization", "Bearer " + accessToken} });
     if (r.status_code != 200)
     {
         std::cerr << "Failed to list emails: " << r.status_code << std::endl;
@@ -137,12 +137,12 @@ std::string listEmails(const std::string &accessToken)
     }
 }
 
-std::string findEmailFromSender(const std::string &accessToken, const std::string &senderEmail, std::unordered_set<std::string> &processedMessageIds)
+std::string findEmailFromSender(const std::string& accessToken, const std::string& senderEmail, std::unordered_set<std::string>& processedMessageIds)
 {
     std::string emailList = listEmails(accessToken);
     auto jsonData = json::parse(emailList);
 
-    for (const auto &message : jsonData["messages"])
+    for (const auto& message : jsonData["messages"])
     {
         std::string messageId = message["id"].get<std::string>();
         if (processedMessageIds.find(messageId) != processedMessageIds.end())
@@ -150,12 +150,12 @@ std::string findEmailFromSender(const std::string &accessToken, const std::strin
             continue; // Skip already processed emails
         }
 
-        cpr::Response r = cpr::Get(cpr::Url{"https://www.googleapis.com/gmail/v1/users/me/messages/" + messageId},
-                                   cpr::Header{{"Authorization", "Bearer " + accessToken}});
+        cpr::Response r = cpr::Get(cpr::Url{ "https://www.googleapis.com/gmail/v1/users/me/messages/" + messageId },
+            cpr::Header{ {"Authorization", "Bearer " + accessToken} });
         if (r.status_code == 200)
         {
             auto emailData = json::parse(r.text);
-            for (const auto &header : emailData["payload"]["headers"])
+            for (const auto& header : emailData["payload"]["headers"])
             {
                 if (header["name"] == "From" && header["value"].get<std::string>().find(senderEmail) != std::string::npos)
                 {
@@ -182,7 +182,7 @@ void startClient()
 {
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo *result = NULL, *ptr = NULL, hints;
+    struct addrinfo* result = NULL, * ptr = NULL, hints;
     int iResult;
     char recvbuf[DEFAULT_BUFLEN];
     int recvbuflen = DEFAULT_BUFLEN;
@@ -204,7 +204,7 @@ void startClient()
     std::string addr;
     std::cout << "Enter server IP address: ";
     std::getline(std::cin, addr);
-    const char *serverAddress = addr.c_str();
+    const char* serverAddress = addr.c_str();
 
     // Resolve the server address and port
     iResult = getaddrinfo(serverAddress, DEFAULT_PORT, &hints, &result);
@@ -250,18 +250,14 @@ void startClient()
     //------------------------------------
     // Change the code here
     // Chat loop
-    std::string sendbuf;
+    std::string request;
     while (1)
     {
         // Get client's message
         std::cout << "Client: ";
-        std::getline(std::cin, sendbuf);
-        
-        if (sendbuf == "exit") {
-            break;
-        }
+        std::getline(std::cin, request);
 
-        iResult = send(ConnectSocket, sendbuf.c_str(), sendbuf.size(), 0);
+        iResult = send(ConnectSocket, request.c_str(), request.size(), 0);
         if (iResult == SOCKET_ERROR)
         {
             std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
@@ -270,6 +266,8 @@ void startClient()
 
         // Receive response from server
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+        std::string result(recvbuf, sizeof(recvbuf));
+        std::cout << result << '\n';
         if (iResult > 0)
         {
             recvbuf[iResult] = '\0'; // Null-terminate the received string
@@ -292,7 +290,7 @@ void startClient()
     closesocket(ConnectSocket);
     WSACleanup();
 }
-void send_request(const std::string &server, const std::string &request, std::string &response)
+void send_request(const std::string& server, const std::string& request, std::string& response)
 {
     // Socket programming
 }

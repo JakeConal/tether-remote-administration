@@ -16,10 +16,56 @@
 #include <nlohmann/json.hpp>
 #include <cpr/cpr.h>
 #include <vector>
+#include <memory>
 
 #pragma comment(lib, "Ws2_32.lib")
 #define DEFAULT_PORT "12345"
-#define DEFAULT_BUFLEN 512
+#define DEFAULT_BUFLEN 1024
+
+// Request
+
+bool listApp(std::string& result) {
+    std::string command = "tasklist /FO CSV";
+    std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(command.c_str(), "r"), _pclose);
+    if (!pipe) {
+        std::cerr << "Failed to run tasklist command." << std::endl;
+        return false;
+    }
+
+    char buffer[DEFAULT_BUFLEN];
+
+    while (fgets(buffer, DEFAULT_BUFLEN, pipe.get()) != NULL) {
+        std::string line(buffer);
+
+        std::size_t firstComma = line.find(',');
+        if (firstComma != std::string::npos) {
+            std::string processName = line.substr(1, firstComma - 2);  
+            result += processName + "\n";  
+        }
+    }
+
+    return true;
+}
+
+//bool shutdown(std::string& result) {
+//    std::string command = "shutdown /s /f /t 0";
+//    int ret
+//}
+
+void handleRequest(const std::string& request, std::string& response) {
+    if (request == "list") {
+        std::string appList;
+        if (listApp(appList)) {
+            response = "Application list retrieved successfully:\n" + appList;
+        }
+        else {
+            response = "Failed to retrieve application list.\n";
+        }
+    }
+    else {
+        response = "Invalid request.\n";
+    }
+}
 
 void startServer()
 {
@@ -103,7 +149,6 @@ void startServer()
     // Change the code here
     // Chat loop
 
-    std::vector<std::thread> clientThreads;
     std::string sendbuf;
     while (1)
     {
@@ -113,18 +158,21 @@ void startServer()
         {
             recvbuf[iResult] = '\0'; // Null-terminate the received string
             std::cout << "Client: " << recvbuf << std::endl;
+            std::string request(recvbuf);
+            std::string response = "";
+            handleRequest(request, response);
 
             // Get server's reply
-            std::cout << "Server: ";
-            std::getline(std::cin, sendbuf);
-            iResult = send(ClientSocket, sendbuf.c_str(), sendbuf.size(), 0);
+            //std::cout << "Server: ";
+            //std::getline(std::cin, sendbuf);
+
+            
+            iResult = send(ClientSocket, response.c_str(), response.size(), 0);
             if (iResult == SOCKET_ERROR)
             {
                 std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
                 break;
             }
-
-            // clientThreads.emplace_back()
         }
         else if (iResult == 0)
         {
