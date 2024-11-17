@@ -1,0 +1,5 @@
+﻿  server.cpp
+C:\Users\PCs\Desktop\Projects\Networking-Project-Semester-3\server\Server\Server\server.cpp(103,71): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+  Server.vcxproj -> C:\Users\PCs\Desktop\Projects\Networking-Project-Semester-3\server\Server\x64\Debug\Server.exe
+  'pwsh.exe' is not recognized as an internal or external command,
+  operable program or batch file.
