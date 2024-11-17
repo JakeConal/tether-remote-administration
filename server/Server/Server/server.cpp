@@ -12,6 +12,10 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <thread>
+#include <nlohmann/json.hpp>
+#include <cpr/cpr.h>
+#include <vector>
 
 #pragma comment(lib, "Ws2_32.lib")
 #define DEFAULT_PORT "12345"
@@ -98,6 +102,8 @@ void startServer()
     //-------------------------------------------------------------
     // Change the code here
     // Chat loop
+
+    std::vector<std::thread> clientThreads;
     std::string sendbuf;
     while (1)
     {
@@ -117,6 +123,8 @@ void startServer()
                 std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
                 break;
             }
+
+            // clientThreads.emplace_back()
         }
         else if (iResult == 0)
         {
