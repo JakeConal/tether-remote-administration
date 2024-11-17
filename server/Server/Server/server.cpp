@@ -13,61 +13,58 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <thread>
-#include <nlohmann/json.hpp>
-#include <cpr/cpr.h>
+//#include <nlohmann/json.hpp>
+//#include <cpr/cpr.h>
 #include <vector>
 #include <memory>
+#include "syscalls.h"
 
 #pragma comment(lib, "Ws2_32.lib")
-#define DEFAULT_PORT "12345"
-#define DEFAULT_BUFLEN 1024
 
 // Request
 
-bool listApp(std::string& result) {
-    std::string command = "tasklist /FO CSV";
-    std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(command.c_str(), "r"), _pclose);
-    if (!pipe) {
-        std::cerr << "Failed to run tasklist command." << std::endl;
-        return false;
-    }
-
-    char buffer[DEFAULT_BUFLEN];
-
-    while (fgets(buffer, DEFAULT_BUFLEN, pipe.get()) != NULL) {
-        std::string line(buffer);
-
-        std::size_t firstComma = line.find(',');
-        if (firstComma != std::string::npos) {
-            std::string processName = line.substr(1, firstComma - 2);  
-            result += processName + "\n";  
+static void handleRequest(std::string& request, std::string& response, std::string params, std::ifstream& file) {
+	COMMANDS command = commandMap.find(request)->second;
+    try {
+        switch (command) {
+            case LIST_PROCESS:
+                listProcess(response);
+                break;
+            case START_PROCESS:
+			    startProcess(params, response);
+                break;
+            case STOP_PROCESS:
+			    stopProcess(params, response);
+                break;
+            case SHUTDOWN:
+                shutdown(response);
+                break;
+            case RESTART:
+                restart(response);
+                break;
+			case DELETE_FILE:
+				deleteFile(params, response);
+				break;
+			case MOVE_FILE:
+				moveFile(params, response);
+				break;
+			case COPY_FILE:
+				copyFile(params, response);
+				break;
+			case CAPTURE_SCREENSHOT:
+				captureScreenshot(params, response, file);
+				break;
+            default:
+                response = "Invalid command.\n";
+                break;
         }
+	}
+    catch (std::exception& e) {
+        response = "An error occurred: " + std::string(e.what()) + "\n";
     }
-
-    return true;
 }
 
-//bool shutdown(std::string& result) {
-//    std::string command = "shutdown /s /f /t 0";
-//    int ret
-//}
-
-void handleRequest(const std::string& request, std::string& response) {
-    if (request == "list") {
-        std::string appList;
-        if (listApp(appList)) {
-            response = "Application list retrieved successfully:\n" + appList;
-        }
-        else {
-            response = "Failed to retrieve application list.\n";
-        }
-    }
-    else {
-        response = "Invalid request.\n";
-    }
-}
-
-void startServer()
+static void startServer()
 {
     WSADATA wsaData;
     SOCKET ListenSocket = INVALID_SOCKET, ClientSocket = INVALID_SOCKET;
@@ -160,14 +157,36 @@ void startServer()
             std::cout << "Client: " << recvbuf << std::endl;
             std::string request(recvbuf);
             std::string response = "";
-            handleRequest(request, response);
+
+			// Split the request into command and parameters separated by newline
+			std::size_t pos = request.find('\n');
+			std::string command = request.substr(0, pos);
+			std::string params = request.substr(pos + 1);
+			std::ifstream file;
+			handleRequest(command, response, params, file);
 
             // Get server's reply
             //std::cout << "Server: ";
             //std::getline(std::cin, sendbuf);
 
-            
-            iResult = send(ClientSocket, response.c_str(), response.size(), 0);
+			// Send the reply to the client
+			if (file.is_open()) {
+				char buffer[DEFAULT_BUFLEN];
+				while (file.read(buffer, DEFAULT_BUFLEN)) {
+					iResult = send(ClientSocket, buffer, DEFAULT_BUFLEN, 0);
+					if (iResult == SOCKET_ERROR) {
+						std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
+						break;
+					}
+				}
+				iResult = send(ClientSocket, buffer, file.gcount(), 0);
+				iResult = send(ClientSocket, response.c_str(), response.size(), 0);
+				file.close();
+			}
+            else {
+                iResult = send(ClientSocket, response.c_str(), response.size(), 0);
+            }
+
             if (iResult == SOCKET_ERROR)
             {
                 std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
