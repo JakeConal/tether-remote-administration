@@ -1,7 +1,7 @@
 #include "syscalls.h"
 #include <windows.h>
 
-bool deleteFile(const std::string& fileName, std::string& result) {
+bool deleteFile(std::string& fileName, std::string& result) {
     // Convert std::string to std::wstring
     std::wstring wFileName(fileName.begin(), fileName.end());
     LPCWSTR file = wFileName.c_str();

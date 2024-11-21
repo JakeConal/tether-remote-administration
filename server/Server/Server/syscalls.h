@@ -4,6 +4,9 @@
 #include <string>
 #include <fstream>
 #include <windows.h>
+#include <atomic>
+#include <thread>
+
 #include "const.h"
 
 bool listProcess(std::string& result);
