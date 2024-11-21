@@ -200,51 +200,57 @@ void startClient()
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    // Get server address from user input
-    std::string addr;
-    std::cout << "Enter server IP address: ";
-    std::getline(std::cin, addr);
-    const char* serverAddress = addr.c_str();
-
-    // Resolve the server address and port
-    iResult = getaddrinfo(serverAddress, DEFAULT_PORT, &hints, &result);
-    if (iResult != 0)
+    while (ConnectSocket == INVALID_SOCKET)
     {
-        std::cerr << "getaddrinfo failed with error: " << iResult << std::endl;
-        WSACleanup();
-        return;
-    }
+        // Get server address from user input
+        std::string addr;
+        std::cout << "Enter server IP address: ";
+        std::getline(std::cin, addr);
+        const char* serverAddress = addr.c_str();
 
-    // Attempt to connect to the first result
-    for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
-    {
-        // Create a socket for connecting to server
-        ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        try {
+            // Resolve the server address and port
+            iResult = getaddrinfo(serverAddress, DEFAULT_PORT, &hints, &result);
+            if (iResult != 0)
+            {
+                std::cerr << "getaddrinfo failed with error: " << iResult << std::endl;
+                WSACleanup();
+                return;
+            }
+
+            // Attempt to connect to the first result
+            for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
+            {
+                // Create a socket for connecting to server
+                ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+                if (ConnectSocket == INVALID_SOCKET)
+                {
+                    std::cerr << "Socket failed with error: " << WSAGetLastError() << std::endl;
+                    WSACleanup();
+                    return;
+                }
+
+                // Connect to server
+                iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
+                if (iResult == SOCKET_ERROR)
+                {
+                    closesocket(ConnectSocket);
+                    ConnectSocket = INVALID_SOCKET;
+                    continue;
+                }
+                break;
+            }
+		}
+		catch (const std::exception& e) {
+			std::cerr << e.what() << std::endl;
+		}
+
+        freeaddrinfo(result);
+
         if (ConnectSocket == INVALID_SOCKET)
         {
-            std::cerr << "Socket failed with error: " << WSAGetLastError() << std::endl;
-            WSACleanup();
-            return;
+            std::cerr << "Unable to connect to server!" << std::endl;
         }
-
-        // Connect to server
-        iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
-        if (iResult == SOCKET_ERROR)
-        {
-            closesocket(ConnectSocket);
-            ConnectSocket = INVALID_SOCKET;
-            continue;
-        }
-        break;
-    }
-
-    freeaddrinfo(result);
-
-    if (ConnectSocket == INVALID_SOCKET)
-    {
-        std::cerr << "Unable to connect to server!" << std::endl;
-        WSACleanup();
-        return;
     }
 
     //------------------------------------
@@ -266,12 +272,10 @@ void startClient()
 
         // Receive response from server
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-        std::string result(recvbuf, sizeof(recvbuf));
-        std::cout << result << '\n';
         if (iResult > 0)
         {
-            recvbuf[iResult] = '\0'; // Null-terminate the received string
-            std::cout << "Server: " << recvbuf << std::endl;
+            std::string res(recvbuf, iResult);
+            std::cout << "Server: " << res << std::endl;
         }
         else if (iResult == 0)
         {

@@ -1,7 +1,5 @@
 {
   "dependencies": [
-    "cpr",
-    "nlohmann-json",
     "opencv2"
   ]
 }

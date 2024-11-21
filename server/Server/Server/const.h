@@ -8,6 +8,7 @@ constexpr auto DEFAULT_PORT = "12345";
 constexpr auto DEFAULT_BUFLEN = 1024;
 
 enum COMMANDS {
+	INVALID,
 	LIST_PROCESS,
 	START_PROCESS,
 	STOP_PROCESS,
@@ -16,7 +17,9 @@ enum COMMANDS {
 	DELETE_FILE,
 	MOVE_FILE,
 	COPY_FILE,
-	CAPTURE_SCREENSHOT
+	CAPTURE_SCREENSHOT,
+	START_WEBCAM,
+	STOP_WEBCAM
 };
 
 const std::map<std::string, COMMANDS> commandMap = {
@@ -28,5 +31,7 @@ const std::map<std::string, COMMANDS> commandMap = {
 	{"delete", DELETE_FILE},
 	{"move", MOVE_FILE},
 	{"copy", COPY_FILE},
-	{"screenshot", CAPTURE_SCREENSHOT}
+	{"screenshot", CAPTURE_SCREENSHOT},
+	{"start_webcam", START_WEBCAM},
+	{"stop_webcam", STOP_WEBCAM}
 };

@@ -6,3 +6,5 @@
 .vs/
 vcpkg_installed/
 x64/
+
+Debug/
