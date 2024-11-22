@@ -234,6 +234,13 @@ static void startServer()
 
 int main()
 {
-	startServer();
+	std::cout << "Server started." << std::endl;
+	try {
+		startServer();
+	}
+	catch (std::exception& e) {
+		std::cerr << "An error occurred: " << e.what() << std::endl;
+		return 1;
+	}
 	return 0;
 }
