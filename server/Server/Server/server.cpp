@@ -60,6 +60,12 @@ static void handleRequest(std::string& request, std::string& response, std::stri
 		case STOP_WEBCAM:
 			stopWebcam(response);
 			break;
+		case LIST_APPS:
+			listApps(response);
+			break;
+		case START_APP:
+			startApp(params, response);
+			break;
 		default:
 			response = "Invalid command.";
 			break;

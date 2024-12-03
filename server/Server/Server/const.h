@@ -19,7 +19,9 @@ enum COMMANDS {
 	COPY_FILE,
 	CAPTURE_SCREENSHOT,
 	START_WEBCAM,
-	STOP_WEBCAM
+	STOP_WEBCAM,
+	LIST_APPS,
+	START_APP
 };
 
 const std::map<std::string, COMMANDS> commandMap = {
@@ -33,5 +35,7 @@ const std::map<std::string, COMMANDS> commandMap = {
 	{"copy", COPY_FILE},
 	{"screenshot", CAPTURE_SCREENSHOT},
 	{"start_webcam", START_WEBCAM},
-	{"stop_webcam", STOP_WEBCAM}
+	{"stop_webcam", STOP_WEBCAM},
+	{"list_app", LIST_APPS},
+	{"start_app", START_APP}
 };

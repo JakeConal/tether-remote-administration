@@ -135,6 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="app.cpp" />
     <ClCompile Include="filesystem.cpp" />
     <ClCompile Include="process.cpp" />
     <ClCompile Include="screenshot.cpp" />

@@ -36,6 +36,9 @@
     <ClCompile Include="webcam.cpp">
       <Filter>Source Files\syscalls</Filter>
     </ClCompile>
+    <ClCompile Include="app.cpp">
+      <Filter>Source Files\syscalls</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="const.h">
