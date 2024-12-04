@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <shlobj.h>
@@ -19,7 +20,7 @@ bool restart(std::string& result);
 bool deleteFile(std::string& fileName, std::string& result);
 bool moveFile(std::string& filenames, std::string& result);
 bool copyFile(std::string& filenames, std::string& result);
-bool captureScreenshot(std::string& filePath, std::string& result, std::ifstream& in);
+bool captureScreenshot(std::string filePath, std::string& result, std::ifstream& in);
 bool startWebcam(std::string& result);
 bool stopWebcam(std::string& result);
 bool listApps(std::string& result);

