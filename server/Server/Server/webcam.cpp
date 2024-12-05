@@ -41,3 +41,4 @@ bool stopWebcam(std::string& result) {
 	result = "Webcam stopped successfully.";
 	return true;
 }
+

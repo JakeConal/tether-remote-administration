@@ -1,4 +1,6 @@
 #pragma once
+#ifndef _CONST_H_
+#define _CONST_H_
 
 #include <iostream>
 #include <map>
@@ -39,3 +41,5 @@ const std::map<std::string, COMMANDS> commandMap = {
 	{"list_app", LIST_APPS},
 	{"start_app", START_APP}
 };
+
+#endif // !_CONST_H_

@@ -275,22 +275,64 @@ void startClient()
 		}
 
 		// Receive response from server
-		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-		if (iResult > 0)
-		{
-			std::string res(recvbuf, iResult);
-			std::cout << "Server: " << res << std::endl;
+		std::ofstream outFile;
+		outFile.open("receive.png", std::ios::binary);
+		
+		if (request == "screenshot") {
+			// Receive file size first
+			int fileSize;
+			iResult = recv(ConnectSocket, (char*)&fileSize, sizeof(fileSize), 0);
+			if (iResult == SOCKET_ERROR) {
+				std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
+				break;
+			}
+
+			std::cout << "Expecting a file of size: " << fileSize << " bytes." << std::endl;
+
+			// Allocate buffer for receiving the file
+			char* fileBuffer = new char[fileSize];
+			int bytesReceived = 0;
+			int totalReceived = 0;
+
+			while (totalReceived < fileSize) {
+				bytesReceived = recv(ConnectSocket, fileBuffer + totalReceived, fileSize - totalReceived, 0);
+				if (bytesReceived == SOCKET_ERROR) {
+					std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
+					delete[] fileBuffer;
+					break;
+				}
+				totalReceived += bytesReceived;
+			}
+
+			// Save the received data to a file
+			std::ofstream outFile("receive.png", std::ios::binary);
+			outFile.write(fileBuffer, totalReceived);
+			outFile.close();
+
+			std::cout << "File received successfully!" << std::endl;
+
+			delete[] fileBuffer;
 		}
-		else if (iResult == 0)
-		{
-			std::cout << "Connection closed by server.\n";
-			break;
+		else {
+			iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+			if (iResult > 0)
+			{
+				std::string res(recvbuf, iResult);
+				std::cout << "Server: " << res << std::endl;
+			}
+			else if (iResult == 0)
+			{
+				std::cout << "Connection closed by server.\n";
+				break;
+			}
+			else
+			{
+				std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
+				break;
+			}
 		}
-		else
-		{
-			std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-			break;
-		}
+		
+		outFile.close();
 	}
 	//--------------------------------------
 

@@ -12,8 +12,6 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
- //#include <nlohmann/json.hpp>
- //#include <cpr/cpr.h>
 #include "syscalls.h"
 #include <minwindef.h>
 #include <ws2def.h>
@@ -189,35 +187,44 @@ static void startServer()
 			std::cout << "Client: " << request << std::endl;
 			std::string response = "";
 
-			// Split the request into command and parameters separated by newline
+			// Split the request into command and parameters
 			std::size_t pos = request.find(' ');
 			std::string command = request.substr(0, pos);
 			std::string params = request.substr(pos + 1);
 			std::ifstream file;
 			handleRequest(command, response, params, file);
 
-			// Get server's reply
-			//std::cout << "Server: ";
-			//std::getline(std::cin, sendbuf);
-
-			// Send the reply to the client
+			// Send file if it's open
 			if (file.is_open()) {
+				// Send file size first
+				//std::cout << "sth\n";
+				file.seekg(0, std::ios::end);
+				int fileSize = static_cast<int>(file.tellg());
+				send(ClientSocket, (char*)&fileSize, sizeof(fileSize), 0);
+
+				file.seekg(0, std::ios::beg);  // Rewind the file to start sending
+
 				char buffer[DEFAULT_BUFLEN];
+				
+				int i = 0;
 				while (file.read(buffer, DEFAULT_BUFLEN)) {
+					
 					iResult = send(ClientSocket, buffer, DEFAULT_BUFLEN, 0);
 					if (iResult == SOCKET_ERROR) {
 						std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
 						break;
 					}
+					//std::cout << i++ << ' ';
 				}
+				// Send any remaining bytes
 				iResult = send(ClientSocket, buffer, file.gcount(), 0);
-				iResult = send(ClientSocket, response.c_str(), response.size(), 0);
 				file.close();
 			}
 			else {
 				iResult = send(ClientSocket, response.c_str(), response.size(), 0);
 			}
 
+			// Error checking
 			if (iResult == SOCKET_ERROR)
 			{
 				std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
@@ -235,6 +242,7 @@ static void startServer()
 			break;
 		}
 	}
+
 	//--------------------------------------------------------------
 
 	// Shutdown and cleanup
