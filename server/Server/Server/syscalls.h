@@ -1,9 +1,13 @@
 #pragma once
 
+
 #include <atomic>
+#include <codecvt>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <locale>
+#include <objidl.h>
 #include <shlobj.h>
 #include <string>
 #include <thread>
@@ -25,3 +29,4 @@ bool startWebcam(std::string& result);
 bool stopWebcam(std::string& result);
 bool listApps(std::string& result);
 bool startApp(std::string name, std::string& result);
+bool stopApp(std::string name, std::string& result);

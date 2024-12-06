@@ -70,6 +70,9 @@ static void handleRequest(std::string& request, std::string& response, std::stri
 		case START_APP:
 			startApp(params, response);
 			break;
+		case STOP_APP:
+			stopApp(params, response);
+			break;
 		default:
 			response = "Invalid command.";
 			break;
