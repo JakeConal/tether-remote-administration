@@ -266,6 +266,10 @@ void startClient()
 		// Get client's message
 		std::cout << "Client: ";
 		std::getline(std::cin, request);
+		if (request.empty())
+		{
+			continue;
+		}
 
 		iResult = send(ConnectSocket, request.c_str(), request.size(), 0);
 		if (iResult == SOCKET_ERROR)
