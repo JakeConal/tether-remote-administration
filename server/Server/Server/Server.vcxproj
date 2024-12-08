@@ -137,15 +137,18 @@
   <ItemGroup>
     <ClCompile Include="app.cpp" />
     <ClCompile Include="filesystem.cpp" />
+    <ClCompile Include="keyboard.cpp" />
     <ClCompile Include="process.cpp" />
     <ClCompile Include="screenshot.cpp" />
     <ClCompile Include="server.cpp" />
     <ClCompile Include="shutdown.cpp" />
+    <ClCompile Include="utils.cpp" />
     <ClCompile Include="webcam.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="const.h" />
     <ClInclude Include="syscalls.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\vcpkg.json" />

