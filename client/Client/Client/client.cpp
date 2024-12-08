@@ -318,11 +318,28 @@ void startClient()
 			delete[] fileBuffer;
 		}
 		else {
-			iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+			int responseSize;
+			iResult = recv(ConnectSocket, (char*)&responseSize, sizeof(responseSize), 0);
 			if (iResult > 0)
 			{
-				std::string res(recvbuf, iResult);
-				std::cout << "Server: " << res << std::endl;
+				// Allocate buffer for receiving the response
+				char* responseBuffer = new char[responseSize];
+				int bytesReceived = 0;
+				int totalReceived = 0;
+
+				while (totalReceived < responseSize)
+				{
+					bytesReceived = recv(ConnectSocket, responseBuffer + totalReceived, responseSize - totalReceived, 0);
+					if (bytesReceived == SOCKET_ERROR)
+					{
+						std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
+						delete[] responseBuffer;
+						break;
+					}
+					totalReceived += bytesReceived;
+				}
+
+				std::cout << "Server: " << std::string(responseBuffer, totalReceived) << std::endl;
 			}
 			else if (iResult == 0)
 			{

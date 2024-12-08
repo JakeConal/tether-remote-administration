@@ -236,7 +236,19 @@ static void startServer()
 				file.close();
 			}
 			else {
-				iResult = send(ClientSocket, response.c_str(), response.size(), 0);
+				// Send response size first
+				int responseSize = response.size();
+				send(ClientSocket, (char*)&responseSize, sizeof(responseSize), 0);
+
+				// Send response
+				while (response.size() > 0) {
+					iResult = send(ClientSocket, response.c_str(), response.size(), 0);
+					if (iResult == SOCKET_ERROR) {
+						std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
+						break;
+					}
+					response.erase(0, iResult);
+				}
 			}
 
 			// Error checking
