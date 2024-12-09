@@ -70,23 +70,23 @@ static bool CaptureScreenshot(std::wstring filePathStr)
 	return status == Ok;
 }
 
-bool captureScreenshot(std::string filePath, std::string& result, std::ifstream& in) {
-	std::filesystem::remove(filePath);
-	std::wstring wFilePath(filePath.begin(), filePath.end());
+bool captureScreenshot(std::string& result, std::ifstream& in) {
+	std::filesystem::remove(SCREENSHOT_PATH);
+	std::wstring wFilePath(SCREENSHOT_PATH.begin(), SCREENSHOT_PATH.end());
 	const wchar_t* cFilePath = wFilePath.c_str();
 	if (CaptureScreenshot(cFilePath)) {
 		in.open(wFilePath, std::ios::binary);
 		if (in.is_open()) {
-			result = "Screenshot captured successfully.\n";
+			result = "Screenshot captured successfully.";
 			return true;
 		}
 		else {
-			result = "Failed to capture screenshot.\n";
+			result = "Failed to capture screenshot.";
 			return false;
 		}
 	}
 	else {
-		result = "Failed to capture screenshot.\n";
+		result = "Failed to capture screenshot.";
 		return false;
 	}
 }

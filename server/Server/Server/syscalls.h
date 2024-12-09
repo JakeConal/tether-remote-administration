@@ -35,12 +35,12 @@ bool copyFile(std::string& filenames, std::string& result);
 #pragma endregion
 
 #pragma region Screenshot operations
-bool captureScreenshot(std::string filePath, std::string& result, std::ifstream& in);
+bool captureScreenshot(std::string& result, std::ifstream& in);
 #pragma endregion
 
 #pragma region Webcam operations
 bool startWebcam(std::string& result);
-bool stopWebcam(std::string& result);
+bool stopWebcam(std::string& result, std::ifstream& output);
 #pragma endregion
 
 #pragma region App operations
