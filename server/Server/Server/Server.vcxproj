@@ -142,11 +142,13 @@
     <ClCompile Include="screenshot.cpp" />
     <ClCompile Include="server.cpp" />
     <ClCompile Include="shutdown.cpp" />
+    <ClCompile Include="socket.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="webcam.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="const.h" />
+    <ClInclude Include="socket.h" />
     <ClInclude Include="syscalls.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
