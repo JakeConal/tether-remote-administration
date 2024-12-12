@@ -5,6 +5,7 @@
 #include <ws2tcpip.h>
 #include <string>
 #include <fstream>
+#include <vector>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -91,13 +92,6 @@ bool connectToServer(SOCKET& ConnectSocket, addrinfo* result)
 	return ConnectSocket != INVALID_SOCKET;
 }
 
-std::string getClientRequest()
-{
-	std::string request;
-	std::cout << "Client: ";
-	std::getline(std::cin, request);
-	return request;
-}
 
 bool sendClientRequest(SOCKET& ConnectSocket, const std::string& request)
 {
@@ -128,9 +122,9 @@ std::string receiveResponseType(SOCKET& ConnectSocket, char* recvbuf, int recvbu
 	return "";
 }
 
-void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
+void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, std::string sender)
 {
-	// Receive file name
+	// Receive file name	
 	char* fileNameBuffer = new char[recvbuflen];
 	int iResult;
 	iResult = recv(ConnectSocket, fileNameBuffer, recvbuflen, 0);
@@ -186,11 +180,15 @@ void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 
 	std::cout << "File received successfully!" << std::endl;
 
+	std::string accessToken = getAccessToken();
+
+	sendGmailWithAttachment(accessToken, sender, "Respone from server", "", fileName);
+
 	delete[] fileBuffer;
 	delete[] fileNameBuffer;
 }
 
-void handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen) {
+void handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, std::string sender) {
 	int responseSize;
 	int iResult;
 	iResult = recv(ConnectSocket, (char*)&responseSize, sizeof(responseSize), 0);
@@ -207,22 +205,44 @@ void handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen) {
 			if (bytesReceived == SOCKET_ERROR)
 			{
 				std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-				delete[] responseBuffer;
+				delete[] responseBuffer;	
 				break;
 			}
 			totalReceived += bytesReceived;
 		}
 
 		std::cout << "Server: " << std::string(responseBuffer, totalReceived) << std::endl;
+		
+		std::string accessToken = getAccessToken();
+		
+		sendEmail(accessToken, sender, "Respone from server", std::string(responseBuffer, totalReceived));	
+
 	}
 }
 
 void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 {
 	std::string request;
+	std::string accessToken = getAccessToken();
+	std::vector<std::string> adminMail = { "hieunguyen.jc@gmail.com", "tiendat1243oo@gmail.com", "phamnamanh25@gmail.com" };
+	std::string messageId = getMessageId(accessToken);
+	std::string processedId = messageId;
+	std::string senderMail;
+
 	while (true)
 	{
-		request = getClientRequest();
+		if (!accessToken.empty()) {
+			while (true) {
+				messageId = getMessageId(accessToken);
+
+				if (messageId != processedId && isAdmin(accessToken, adminMail, messageId, senderMail)) {
+					processedId = messageId;
+					request = getEmail(accessToken, messageId);
+					break;
+				}
+			}
+		}
+
 		if (!sendClientRequest(ConnectSocket, request))
 			break;
 
@@ -233,13 +253,13 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 		}
 
 		std::string responseType = receiveResponseType(ConnectSocket, recvbuf, recvbuflen);
-		if (responseType == "file")
+		if (responseType == "file")	
 		{
-			handleFileResponse(ConnectSocket, recvbuf, recvbuflen);
+			handleFileResponse(ConnectSocket, recvbuf, recvbuflen, senderMail);
 		}
 		else if (responseType == "text")
 		{
-			handleTextResponse(ConnectSocket, recvbuf, recvbuflen);
+			handleTextResponse(ConnectSocket, recvbuf, recvbuflen, senderMail);
 		}
 		else
 		{

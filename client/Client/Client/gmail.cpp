@@ -60,15 +60,21 @@ std::string getMessageId(const std::string& accessToken) {
     }
 }
 
-bool isAdmin(const std::string& accessToken, const std::string& senderEmail, const std::string& messageId) {
+bool isAdmin(const std::string& accessToken, const std::vector<std::string>& adminMail, const std::string& messageId, std::string senderMail) {
     cpr::Response r = cpr::Get(cpr::Url{ "https://www.googleapis.com/gmail/v1/users/me/messages/" + messageId },
         cpr::Header{ {"Authorization", "Bearer " + accessToken} });
 
     if (r.status_code == 200) {
         auto emailData = json::parse(r.text);
         for (const auto& header : emailData["payload"]["headers"]) {
-            if (header["name"] == "From" && header["value"].get<std::string>().find(senderEmail) != std::string::npos) {
-                return true;
+            if (header["name"] == "From") {
+                for (std::string mail : adminMail) {
+                    if (header["value"].get<std::string>().find(mail) != std::string::npos) {
+                        senderMail = mail;
+                        return true;
+                    }
+                }
+                
             }
         }
     }
