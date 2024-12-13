@@ -122,7 +122,7 @@ std::string receiveResponseType(SOCKET& ConnectSocket, char* recvbuf, int recvbu
 	return "";
 }
 
-void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, std::string sender)
+std::string handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 {
 	// Receive file name	
 	char* fileNameBuffer = new char[recvbuflen];
@@ -130,7 +130,7 @@ void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, st
 	iResult = recv(ConnectSocket, fileNameBuffer, recvbuflen, 0);
 	if (iResult == SOCKET_ERROR) {
 		std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-		return;
+		return "";
 	}
 
 	std::string fileName(fileNameBuffer, iResult);
@@ -141,7 +141,7 @@ void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, st
 	iResult = recv(ConnectSocket, (char*)&fileSize, sizeof(fileSize), 0);
 	if (iResult == SOCKET_ERROR) {
 		std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-		return;
+		return "";
 	}
 
 	std::cout << "Expecting a file of size: ";
@@ -180,15 +180,13 @@ void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, st
 
 	std::cout << "File received successfully!" << std::endl;
 
-	std::string accessToken = getAccessToken();
-
-	sendGmailWithAttachment(accessToken, sender, "Respone from server", "", fileName);
+	return fileName;
 
 	delete[] fileBuffer;
 	delete[] fileNameBuffer;
 }
 
-void handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, std::string sender) {
+std::string handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen) {
 	int responseSize;
 	int iResult;
 	iResult = recv(ConnectSocket, (char*)&responseSize, sizeof(responseSize), 0);
@@ -205,18 +203,15 @@ void handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, st
 			if (bytesReceived == SOCKET_ERROR)
 			{
 				std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-				delete[] responseBuffer;	
+				delete[] responseBuffer;
 				break;
 			}
 			totalReceived += bytesReceived;
 		}
 
 		std::cout << "Server: " << std::string(responseBuffer, totalReceived) << std::endl;
-		
-		std::string accessToken = getAccessToken();
-		
-		sendEmail(accessToken, sender, "Respone from server", std::string(responseBuffer, totalReceived));	
 
+		return std::string(responseBuffer, totalReceived);
 	}
 }
 
@@ -228,7 +223,7 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 	std::string messageId = getMessageId(accessToken);
 	std::string processedId = messageId;
 	std::string senderMail;
-	
+
 	while (true)
 	{
 		if (!accessToken.empty()) {
@@ -240,6 +235,7 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 					request = getEmail(accessToken, messageId);
 					request.pop_back();
 					request.pop_back();
+					//request.erase(request.find('\n'));
 					break;
 				}
 			}
@@ -255,13 +251,15 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 		}
 
 		std::string responseType = receiveResponseType(ConnectSocket, recvbuf, recvbuflen);
-		if (responseType == "file")	
+		if (responseType == "file")
 		{
-			handleFileResponse(ConnectSocket, recvbuf, recvbuflen, senderMail);
+			std::string respone = handleFileResponse(ConnectSocket, recvbuf, recvbuflen);
+			sendGmailWithAttachment(accessToken, senderMail, "Command Result", "", respone);
 		}
 		else if (responseType == "text")
 		{
-			handleTextResponse(ConnectSocket, recvbuf, recvbuflen, senderMail);
+			std::string respone = handleTextResponse(ConnectSocket, recvbuf, recvbuflen);
+			sendEmail(accessToken, senderMail, "Command Result", respone);
 		}
 		else
 		{

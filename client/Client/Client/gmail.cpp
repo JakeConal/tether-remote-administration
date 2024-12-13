@@ -60,7 +60,7 @@ std::string getMessageId(const std::string& accessToken) {
     }
 }
 
-bool isAdmin(const std::string& accessToken, const std::vector<std::string>& adminMail, const std::string& messageId, std::string senderMail) {
+bool isAdmin(const std::string& accessToken, const std::vector<std::string>& adminMail, const std::string& messageId, std::string& senderMail) {
     cpr::Response r = cpr::Get(cpr::Url{ "https://www.googleapis.com/gmail/v1/users/me/messages/" + messageId },
         cpr::Header{ {"Authorization", "Bearer " + accessToken} });
 

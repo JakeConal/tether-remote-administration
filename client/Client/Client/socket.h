@@ -21,7 +21,7 @@ addrinfo* getServerAddress(const std::string& serverAddress, const std::string& 
 bool connectToServer(SOCKET& ConnectSocket, addrinfo* result);	
 bool sendClientRequest(SOCKET& ConnectSocket, const std::string& request);
 std::string receiveResponseType(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen);
-void handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, std::string sender);
-void handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen, std::string sender);
+std::string handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen);
+std::string handleTextResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen);
 void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen);
 void cleanup(SOCKET& ConnectSocket);
