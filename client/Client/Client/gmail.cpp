@@ -68,8 +68,9 @@ bool isAdmin(const std::string& accessToken, const std::vector<std::string>& adm
         auto emailData = json::parse(r.text);
         for (const auto& header : emailData["payload"]["headers"]) {
             if (header["name"] == "From") {
+                std::string sender = header["value"].get<std::string>();
                 for (std::string mail : adminMail) {
-                    if (header["value"].get<std::string>().find(mail) != std::string::npos) {
+                    if (sender.find(mail) != std::string::npos) {
                         senderMail = mail;
                         return true;
                     }
