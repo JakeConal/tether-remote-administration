@@ -121,6 +121,7 @@ void sendGmailWithAttachment(const std::string& accessToken, const std::string& 
         cpr::Header{ {"Authorization", "Bearer " + accessToken},
                     {"Content-Type", "application/json"} },
         cpr::Body{ rawMessage });
+
     if (r.status_code != 200) {
         std::cerr << "Failed to send email with attachment: " << r.status_code << std::endl;
     }

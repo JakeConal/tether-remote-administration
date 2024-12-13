@@ -63,6 +63,7 @@ static void handleRequest(std::string& request, std::string& response, std::stri
 			unlockKeyboard(response);
 			break;
 		default:
+            //std::cout << request << '\n';
 			response = "Invalid command.";
 			break;
 		}

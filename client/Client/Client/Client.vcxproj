@@ -32,6 +32,9 @@
     <ClInclude Include="gmail.h" />
     <ClInclude Include="socket.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="client.txt" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

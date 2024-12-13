@@ -228,7 +228,7 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 	std::string messageId = getMessageId(accessToken);
 	std::string processedId = messageId;
 	std::string senderMail;
-
+	
 	while (true)
 	{
 		if (!accessToken.empty()) {
@@ -238,6 +238,8 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 				if (messageId != processedId && isAdmin(accessToken, adminMail, messageId, senderMail)) {
 					processedId = messageId;
 					request = getEmail(accessToken, messageId);
+					request.pop_back();
+					request.pop_back();
 					break;
 				}
 			}
