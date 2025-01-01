@@ -173,7 +173,7 @@ void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
     std::string fileName = filePaths.find(command) != filePaths.end() ? filePaths.at(command) : "unknown";
 
     // Send file name
-    send(ClientSocket, fileName.c_str(), sizeof(fileName), 0);
+    send(ClientSocket, fileName.c_str(), fileName.size(), 0);
 
     // Send file size
     file.seekg(0, std::ios::end);

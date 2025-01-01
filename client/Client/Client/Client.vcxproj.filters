@@ -45,6 +45,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="client.txt" />
+    <Text Include="client.txt">
+      <Filter>Source Files</Filter>
+    </Text>
   </ItemGroup>
 </Project>
