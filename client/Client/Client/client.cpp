@@ -9,7 +9,7 @@
 #include <vector>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-
+#include <conio.h>
 #include "socket.h"
 
 void startClient()
