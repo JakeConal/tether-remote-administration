@@ -2,7 +2,7 @@
 *.out
 *.db
 *.png
-*.txt
+
 *.mp4
 
 .vscode/
