@@ -187,13 +187,16 @@ SOCKET acceptClient(SOCKET &ListenSocket)
 void sendFile(SOCKET &ClientSocket, std::ifstream &file, std::string command)
 {
 	// Send response type
-	send(ClientSocket, "file", 4, 0);
+	std::string responseType = "file";
+	int responseTypeSize = responseType.size();
+	send(ClientSocket, reinterpret_cast<char*>(&responseTypeSize), sizeof(responseTypeSize), 0);
+	send(ClientSocket, responseType.c_str(), responseType.size(), 0);
 
 	std::string fileName = filePaths.find(command) != filePaths.end() ? filePaths.at(command) : "unknown";
 
 	// Send file name
 	int fileNameLength = fileName.size();
-	send(ClientSocket, (char *)&fileNameLength, sizeof(fileNameLength), 0);
+	send(ClientSocket, reinterpret_cast<char *>( & fileNameLength), sizeof(fileNameLength), 0);
 	send(ClientSocket, fileName.c_str(), fileName.size(), 0);
 
 	// Send file size
@@ -223,7 +226,10 @@ void sendFile(SOCKET &ClientSocket, std::ifstream &file, std::string command)
 
 void sendResponse(SOCKET &ClientSocket, std::string &response)
 {
-	send(ClientSocket, "text", 4, 0);
+	std::string responseType = "text";
+	int responseTypeSize = responseType.size();
+	send(ClientSocket, reinterpret_cast<char*>(&responseTypeSize), sizeof(responseTypeSize), 0);
+	send(ClientSocket, responseType.c_str(), responseType.size(), 0);
 
 	// Send response size first
 	int responseSize = response.size();
