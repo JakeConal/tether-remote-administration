@@ -2,90 +2,94 @@
 #include "const.h"
 #include "syscalls.h"
 #include <unordered_map>
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <string>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#pragma comment(lib, "Ws2_32.lib")
 
 // Request
-static void handleRequest(std::string& request, std::string& response, std::string params, std::ifstream& file) {
-	COMMANDS command = commandMap.find(request) != commandMap.end() ? commandMap.at(request) : INVALID;
-	try {
-		switch (command) {
-		case LIST_PROCESS:
-			listProcess(response);
-			break;
-		case START_PROCESS:
-			startProcess(params, response);
-			break;
-		case STOP_PROCESS:
-			stopProcess(params, response);
-			break;
-		case SHUTDOWN:
-			shutdown(response);
-			break;
-		case RESTART:
-			restart(response);
-			break;
-		case DELETE_FILE:
-			deleteFile(params, response);
-			break;
-		case MOVE_FILE:
-			moveFile(params, response);
-			break;
-		case COPY_FILE:
-			copyFile(params, response);
-			break;
-		case CAPTURE_SCREENSHOT:
-			captureScreenshot(response, file);
-			break;
-		case START_WEBCAM:
-			startWebcam(response);
-			break;
-		case STOP_WEBCAM:
-			stopWebcam(response, file);
-			break;
-		case LIST_APPS:
-			listApps(response);
-			break;
-		case START_APP:
-			startApp(params, response);
-			break;
-		case STOP_APP:
-			stopApp(params, response);
-			break;
-		case START_KEYLOGGER:
-			startKeylogger(response);
-			break;
-		case STOP_KEYLOGGER:
-			stopKeylogger(response, file);
-			break;
-		case LOCK_KEYBOARD:
-			lockKeyboard(response);
-			break;
-		case UNLOCK_KEYBOARD:
-			unlockKeyboard(response);
-			break;
-		default:
-            //std::cout << request << '\n';
-			response = "Invalid command.";
-			break;
-		}
-	}
-	catch (std::exception& e) {
-		response = "An error occurred: " + std::string(e.what()) + "\n";
-	}
+static void handleRequest(const std::string& request, std::string& response, std::string& params, std::ifstream& file) {
+    COMMANDS command = commandMap.find(request) != commandMap.end() ? commandMap.at(request) : INVALID;
+    try {
+        switch (command) {
+        case LIST_PROCESS:
+            listProcess(response);
+            break;
+        case START_PROCESS:
+            startProcess(params, response);
+            break;
+        case STOP_PROCESS:
+            stopProcess(params, response);
+            break;
+        case SHUTDOWN:
+            shutdown(response);
+            break;
+        case RESTART:
+            restart(response);
+            break;
+        case DELETE_FILE:
+            deleteFile(params, response);
+            break;
+        case MOVE_FILE:
+            moveFile(params, response);
+            break;
+        case COPY_FILE:
+            copyFile(params, response);
+            break;
+        case CAPTURE_SCREENSHOT:
+            captureScreenshot(response, file);
+            break;
+        case START_WEBCAM:
+            startWebcam(response);
+            break;
+        case STOP_WEBCAM:
+            stopWebcam(response, file);
+            break;
+        case LIST_APPS:
+            listApps(response);
+            break;
+        case START_APP:
+            startApp(params, response);
+            break;
+        case STOP_APP:
+            stopApp(params, response);
+            break;
+        case START_KEYLOGGER:
+            startKeylogger(response);
+            break;
+        case STOP_KEYLOGGER:
+            stopKeylogger(response, file);
+            break;
+        case LOCK_KEYBOARD:
+            lockKeyboard(response);
+            break;
+        case UNLOCK_KEYBOARD:
+            unlockKeyboard(response);
+            break;
+        default:
+            response = "Invalid command.";
+            break;
+        }
+    }
+    catch (const std::exception& e) {
+        response = "An error occurred: " + std::string(e.what()) + "\n";
+    }
 }
 
-bool initializeWinsock(WSADATA& wsaData)
-{
+bool initializeWinsock(WSADATA& wsaData) {
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != 0)
-    {
+    if (iResult != 0) {
         std::cerr << "WSAStartup failed with error: " << iResult << std::endl;
         return false;
     }
     return true;
 }
 
-bool setupSocket(SOCKET& ListenSocket, addrinfo*& result)
-{
+bool setupSocket(SOCKET& ListenSocket, addrinfo*& result) {
     struct addrinfo hints = {};
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -94,16 +98,14 @@ bool setupSocket(SOCKET& ListenSocket, addrinfo*& result)
     hints.ai_flags = AI_PASSIVE;
 
     int iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
-    if (iResult != 0)
-    {
+    if (iResult != 0) {
         std::cerr << "getaddrinfo failed with error: " << iResult << std::endl;
         WSACleanup();
         return false;
     }
 
     ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-    if (ListenSocket == INVALID_SOCKET)
-    {
+    if (ListenSocket == INVALID_SOCKET) {
         std::cerr << "Socket failed with error: " << WSAGetLastError() << std::endl;
         freeaddrinfo(result);
         WSACleanup();
@@ -111,8 +113,7 @@ bool setupSocket(SOCKET& ListenSocket, addrinfo*& result)
     }
 
     iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
-    if (iResult == SOCKET_ERROR)
-    {
+    if (iResult == SOCKET_ERROR) {
         std::cerr << "Bind failed with error: " << WSAGetLastError() << std::endl;
         freeaddrinfo(result);
         closesocket(ListenSocket);
@@ -123,8 +124,7 @@ bool setupSocket(SOCKET& ListenSocket, addrinfo*& result)
     freeaddrinfo(result);
 
     iResult = listen(ListenSocket, SOMAXCONN);
-    if (iResult == SOCKET_ERROR)
-    {
+    if (iResult == SOCKET_ERROR) {
         std::cerr << "Listen failed with error: " << WSAGetLastError() << std::endl;
         closesocket(ListenSocket);
         WSACleanup();
@@ -133,8 +133,7 @@ bool setupSocket(SOCKET& ListenSocket, addrinfo*& result)
     return true;
 }
 
-void printListeningInfo(SOCKET& ListenSocket)
-{
+void printListeningInfo(SOCKET& ListenSocket) {
     struct sockaddr_in addr;
     int addrlen = sizeof(addr);
     getsockname(ListenSocket, (struct sockaddr*)&addr, &addrlen);
@@ -149,35 +148,34 @@ void printListeningInfo(SOCKET& ListenSocket)
     std::cout << "Waiting for client connection...\n";
 }
 
-SOCKET acceptClient(SOCKET& ListenSocket)
-{
+SOCKET acceptClient(SOCKET& ListenSocket) {
     SOCKET ClientSocket = accept(ListenSocket, NULL, NULL);
-    if (ClientSocket == INVALID_SOCKET)
-    {
+    if (ClientSocket == INVALID_SOCKET) {
         std::cerr << "Accept failed with error: " << WSAGetLastError() << std::endl;
         closesocket(ListenSocket);
         WSACleanup();
     }
-    else
-    {
+    else {
         std::cout << "Connection established!" << std::endl;
     }
     return ClientSocket;
 }
 
-void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
-{
+void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command) {
     // Send response type
     send(ClientSocket, "file", 4, 0);
 
     std::string fileName = filePaths.find(command) != filePaths.end() ? filePaths.at(command) : "unknown";
 
     // Send file name
+    int fileNameLength = fileName.size();
+    send(ClientSocket, (char*)&fileNameLength, sizeof(fileNameLength), 0);
     send(ClientSocket, fileName.c_str(), fileName.size(), 0);
 
     // Send file size
     file.seekg(0, std::ios::end);
     unsigned long long fileSize = std::filesystem::file_size(fileName);
+
     send(ClientSocket, (char*)&fileSize, sizeof(fileSize), 0);
 
     file.seekg(0, std::ios::beg);  // Rewind the file to start sending
@@ -191,15 +189,13 @@ void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
             std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
             break;
         }
-        //std::cout << i++ << ' ';
     }
     // Send any remaining bytes
     iResult = send(ClientSocket, buffer, file.gcount(), 0);
     file.close();
 }
 
-void sendResponse(SOCKET& ClientSocket, std::string& response)
-{
+void sendResponse(SOCKET& ClientSocket, std::string& response) {
     send(ClientSocket, "text", 4, 0);
 
     // Send response size first
@@ -208,7 +204,7 @@ void sendResponse(SOCKET& ClientSocket, std::string& response)
 
     // Send response
     int iResult;
-    while (response.size() > 0) {
+    while (!response.empty()) {
         iResult = send(ClientSocket, response.c_str(), response.size(), 0);
         if (iResult == SOCKET_ERROR) {
             std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
@@ -218,11 +214,7 @@ void sendResponse(SOCKET& ClientSocket, std::string& response)
     }
 }
 
-void processRequest(SOCKET& ClientSocket, const std::string& request)
-{
-    char recvbuf[DEFAULT_BUFLEN];
-    int iResult;
-
+void processRequest(SOCKET& ClientSocket, const std::string& request) {
     std::size_t pos = request.find(' ');
     std::string command = request.substr(0, pos);
     std::string params = request.substr(pos + 1);
@@ -231,27 +223,22 @@ void processRequest(SOCKET& ClientSocket, const std::string& request)
 
     handleRequest(command, response, params, file);
 
-    if (file.is_open())
-    {
+    if (file.is_open()) {
         sendFile(ClientSocket, file, command);
     }
-    else
-    {
+    else {
         sendResponse(ClientSocket, response);
     }
 }
 
-void handleClient(SOCKET& ClientSocket)
-{
+void handleClient(SOCKET& ClientSocket) {
     char recvbuf[DEFAULT_BUFLEN];
     int recvbuflen = DEFAULT_BUFLEN;
     int iResult;
 
-    while (true)
-    {
+    while (true) {
         iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-        if (iResult > 0)
-        {
+        if (iResult > 0) {
             std::string request(recvbuf, iResult);
             std::cout << "Client: " << request << std::endl;
 
@@ -261,21 +248,18 @@ void handleClient(SOCKET& ClientSocket)
             // Process and send response
             processRequest(ClientSocket, request);
         }
-        else if (iResult == 0)
-        {
+        else if (iResult == 0) {
             std::cout << "Connection closing...\n";
             break;
         }
-        else
-        {
+        else {
             std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
             break;
         }
     }
 }
 
-void cleanup(SOCKET& ClientSocket)
-{
+void cleanup(SOCKET& ClientSocket) {
     closesocket(ClientSocket);
     WSACleanup();
 }
