@@ -39,3 +39,27 @@ bool restartAsAdmin() {
 
 	return true;
 }
+
+std::string exec(const char* cmd) {
+	std::array<char, 128> buffer;
+	std::string result;
+	std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(cmd, "r"), _pclose);
+	if (!pipe) {
+		throw std::runtime_error("popen() failed!");
+	}
+	while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+		result += buffer.data();
+	}
+	return result;
+}
+
+std::vector<std::string> findAllLines(const std::string& str, const std::string& find) {
+	std::vector<std::string> lines;
+	size_t pos = 0;
+	while ((pos = str.find(find, pos)) != std::string::npos) {
+		size_t end = str.find("\n", pos);
+		lines.push_back(str.substr(pos, end - pos));
+		pos = end;
+	}
+	return lines;
+}
