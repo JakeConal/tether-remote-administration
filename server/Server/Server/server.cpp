@@ -49,11 +49,11 @@ int main()
 	// Hide console window
 	//ShowWindow(GetConsoleWindow(), SW_HIDE);
 	//// Comment to debug
-	//if (!isElevated()) {
-	//	// Request for elevation
-	//	restartAsAdmin();
-	//	return 0;
-	//}
+	if (!isElevated()) {
+		// Request for elevation
+		restartAsAdmin();
+		return 0;
+	}
 
 	std::cout << "Server started." << std::endl;
 	try {
