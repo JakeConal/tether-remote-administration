@@ -6,6 +6,7 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <algorithm>	
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -154,26 +155,29 @@ std::string handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuf
 	}
 
 	// Allocate buffer for receiving the file
-	char* fileBuffer = new char[fileSize];
 	unsigned long long bytesReceived = 0;
 	unsigned long long totalReceived = 0;
 
+
+	const int CHUNK_SIZE = 1024 * 64;
+	char* fileBuffer = new char[CHUNK_SIZE];
+	remove(fileName.c_str());
+
+	std::ofstream outFile(fileName, std::ios::app | std::ios::binary);
 	while (totalReceived < fileSize) {
-		bytesReceived = recv(ConnectSocket, fileBuffer + totalReceived, fileSize - totalReceived, 0);
+		size_t bytesToReceive = min(static_cast<size_t>(fileSize - totalReceived), CHUNK_SIZE);
+		bytesReceived = recv(ConnectSocket, fileBuffer, bytesToReceive, 0);
 		if (bytesReceived == SOCKET_ERROR) {
 			std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
 			delete[] fileBuffer;
 			break;
 		}
+		outFile.write(fileBuffer, bytesReceived);
 		totalReceived += bytesReceived;
 		// Print progress bar
 		printProgressBar(totalReceived, fileSize);
 	}
 	std::cout << std::endl;
-
-	// Save the received data to a file
-	std::ofstream outFile(fileName, std::ios::binary);
-	outFile.write(fileBuffer, fileSize);
 	outFile.close();
 
 	std::cout << "File received successfully!" << std::endl;
