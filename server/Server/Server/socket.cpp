@@ -12,7 +12,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 // Request
-static void handleRequest(const std::string &request, std::string &response, std::string &params, std::ifstream &file)
+static void handleRequest(const std::string& request, std::string& response, std::string& params, std::ifstream& file)
 {
 	COMMANDS command = commandMap.find(request) != commandMap.end() ? commandMap.at(request) : INVALID;
 	try
@@ -33,6 +33,9 @@ static void handleRequest(const std::string &request, std::string &response, std
 			break;
 		case RESTART:
 			restart(response);
+			break;
+		case LIST_FILES:
+			listFiles(params, response);
 			break;
 		case DELETE_FILE:
 			deleteFile(params, response);
@@ -78,13 +81,13 @@ static void handleRequest(const std::string &request, std::string &response, std
 			break;
 		}
 	}
-	catch (const std::exception &e)
+	catch (const std::exception& e)
 	{
 		response = "An error occurred: " + std::string(e.what()) + "\n";
 	}
 }
 
-bool initializeWinsock(WSADATA &wsaData)
+bool initializeWinsock(WSADATA& wsaData)
 {
 	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0)
@@ -95,7 +98,7 @@ bool initializeWinsock(WSADATA &wsaData)
 	return true;
 }
 
-bool setupSocket(SOCKET &ListenSocket, addrinfo *&result)
+bool setupSocket(SOCKET& ListenSocket, addrinfo*& result)
 {
 	struct addrinfo hints = {};
 	ZeroMemory(&hints, sizeof(hints));
@@ -144,12 +147,12 @@ bool setupSocket(SOCKET &ListenSocket, addrinfo *&result)
 	return true;
 }
 
-void printIPAddress(const sockaddr_in &addr)
+void printIPAddress(const sockaddr_in& addr)
 {
 	// Run ipconfig in cmd to get the IP address
 	std::string res = exec("ipconfig");
 	std::vector<std::string> lines = findAllLines(res, "IPv4 Address");
-	for (const auto &line : lines)
+	for (const auto& line : lines)
 	{
 		// Get only the IP address
 		std::string ip = line.substr(line.find(":") + 2);
@@ -157,18 +160,18 @@ void printIPAddress(const sockaddr_in &addr)
 	}
 }
 
-void printListeningInfo(SOCKET &ListenSocket)
+void printListeningInfo(SOCKET& ListenSocket)
 {
 	struct sockaddr_in addr;
 	int addrlen = sizeof(addr);
-	getsockname(ListenSocket, (struct sockaddr *)&addr, &addrlen);
+	getsockname(ListenSocket, (struct sockaddr*)&addr, &addrlen);
 
 	printIPAddress(addr);
 
 	std::cout << "Waiting for client connection...\n";
 }
 
-SOCKET acceptClient(SOCKET &ListenSocket)
+SOCKET acceptClient(SOCKET& ListenSocket)
 {
 	SOCKET ClientSocket = accept(ListenSocket, NULL, NULL);
 	if (ClientSocket == INVALID_SOCKET)
@@ -184,7 +187,7 @@ SOCKET acceptClient(SOCKET &ListenSocket)
 	return ClientSocket;
 }
 
-void sendFile(SOCKET &ClientSocket, std::ifstream &file, std::string command)
+void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
 {
 	// Send response type
 	std::string responseType = "file";
@@ -196,14 +199,14 @@ void sendFile(SOCKET &ClientSocket, std::ifstream &file, std::string command)
 
 	// Send file name
 	int fileNameLength = fileName.size();
-	send(ClientSocket, reinterpret_cast<char *>( & fileNameLength), sizeof(fileNameLength), 0);
+	send(ClientSocket, reinterpret_cast<char*>(&fileNameLength), sizeof(fileNameLength), 0);
 	send(ClientSocket, fileName.c_str(), fileName.size(), 0);
 
 	// Send file size
 	file.seekg(0, std::ios::end);
 	unsigned long long fileSize = std::filesystem::file_size(fileName);
 
-	send(ClientSocket, (char *)&fileSize, sizeof(fileSize), 0);
+	send(ClientSocket, (char*)&fileSize, sizeof(fileSize), 0);
 
 	file.seekg(0, std::ios::beg); // Rewind the file to start sending
 
@@ -224,7 +227,7 @@ void sendFile(SOCKET &ClientSocket, std::ifstream &file, std::string command)
 	file.close();
 }
 
-void sendResponse(SOCKET &ClientSocket, std::string &response)
+void sendResponse(SOCKET& ClientSocket, std::string& response)
 {
 	std::string responseType = "text";
 	int responseTypeSize = responseType.size();
@@ -233,7 +236,7 @@ void sendResponse(SOCKET &ClientSocket, std::string &response)
 
 	// Send response size first
 	int responseSize = response.size();
-	send(ClientSocket, (char *)&responseSize, sizeof(responseSize), 0);
+	send(ClientSocket, (char*)&responseSize, sizeof(responseSize), 0);
 
 	// Send response
 	int iResult;
@@ -249,9 +252,11 @@ void sendResponse(SOCKET &ClientSocket, std::string &response)
 	}
 }
 
-void processRequest(SOCKET &ClientSocket, const std::string &request)
+void processRequest(SOCKET& ClientSocket, std::string& request)
 {
-	std::size_t pos = request.find(' ');
+	// Remove all \r\n
+	request.erase(std::remove(request.begin(), request.end(), '\r'), request.end());
+	std::size_t pos = request.find('\n');
 	std::string command = request.substr(0, pos);
 	std::string params = request.substr(pos + 1);
 	std::ifstream file;
@@ -269,7 +274,7 @@ void processRequest(SOCKET &ClientSocket, const std::string &request)
 	}
 }
 
-void handleClient(SOCKET &ClientSocket)
+void handleClient(SOCKET& ClientSocket)
 {
 	char recvbuf[DEFAULT_BUFLEN];
 	int recvbuflen = DEFAULT_BUFLEN;
@@ -303,7 +308,7 @@ void handleClient(SOCKET &ClientSocket)
 	}
 }
 
-void cleanup(SOCKET &ClientSocket)
+void cleanup(SOCKET& ClientSocket)
 {
 	closesocket(ClientSocket);
 	WSACleanup();

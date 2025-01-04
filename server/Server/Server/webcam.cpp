@@ -16,7 +16,7 @@ void displayWebcam() {
 	// Define the codec and create a VideoWriter object
 	int frame_width = static_cast<int>(cap.get(CV_CAP_PROP_FRAME_WIDTH));
 	int frame_height = static_cast<int>(cap.get(CV_CAP_PROP_FRAME_HEIGHT));
-	cv::VideoWriter video(WEBCAM_PATH, CV_FOURCC('a', 'v', 'c', '1'), 15, cv::Size(frame_width, frame_height));
+	cv::VideoWriter video(WEBCAM_PATH, CV_FOURCC('a', 'v', 'c', '1'), 30, cv::Size(frame_width, frame_height));
 
 	// Check if the VideoWriter object is initialized successfully
 	if (!video.isOpened()) {

@@ -23,7 +23,7 @@ bool setupSocket(SOCKET& ListenSocket, addrinfo*& result);
 void printListeningInfo(SOCKET& ListenSocket);
 SOCKET acceptClient(SOCKET& ListenSocket);
 
-void processRequest(SOCKET& ClientSocket, const std::string& request);
+void processRequest(SOCKET& ClientSocket, std::string& request);
 void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command);
 void sendResponse(SOCKET& ClientSocket, std::string& response);
 void handleClient(SOCKET& ClientSocket);

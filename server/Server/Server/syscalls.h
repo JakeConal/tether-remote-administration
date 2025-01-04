@@ -29,6 +29,7 @@ bool restart(std::string& result);
 #pragma endregion
 
 #pragma region File operations
+bool listFiles(std::string& directory, std::string& result);
 bool deleteFile(std::string& fileName, std::string& result);
 bool moveFile(std::string& filenames, std::string& result);
 bool copyFile(std::string& filenames, std::string& result);
