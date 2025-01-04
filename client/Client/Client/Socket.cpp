@@ -97,7 +97,7 @@ std::string receiveResponseType(SOCKET& ConnectSocket, char* recvbuf, int recvbu
 {
 	int iResult = 0;
 	int responseTypeSize = 0;
-	iResult = recv(ConnectSocket, reinterpret_cast<char*>(responseTypeSize), sizeof(responseTypeSize), 0);
+	iResult = recv(ConnectSocket, reinterpret_cast<char*>(&responseTypeSize), sizeof(responseTypeSize), 0);
 	iResult = recv(ConnectSocket, recvbuf, responseTypeSize, 0);
 	if (iResult > 0)
 	{
