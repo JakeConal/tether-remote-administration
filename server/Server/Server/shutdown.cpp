@@ -1,7 +1,7 @@
 #include "syscalls.h"
 
 bool shutdown(std::string& result) {
-	std::string command = "shutdown /s /f /t 30";
+	std::string command = "shutdown /s /f /t 15";
 	int ret = system(command.c_str());
 	if (ret == 0) {
 		result = "Shutdown command executed successfully.\n";
@@ -14,7 +14,7 @@ bool shutdown(std::string& result) {
 }
 
 bool restart(std::string& result) {
-	std::string command = "shutdown /r /f /t 30";
+	std::string command = "shutdown /r /f /t 15";
 	int ret = system(command.c_str());
 	if (ret == 0) {
 		result = "Restart command executed successfully.\n";
