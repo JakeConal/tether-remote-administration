@@ -191,7 +191,7 @@ SOCKET acceptClient(SOCKET& ListenSocket)
 
 // Existing code...
 
-void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
+void sendFile(SOCKET& ClientSocket, std::string command)
 {
 	// Send response type
 	std::string responseType = "file";
@@ -207,15 +207,12 @@ void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
 	send(ClientSocket, fileName.c_str(), fileName.size(), 0);
 
 	// Send file size
-	file.seekg(0, std::ios::end);
 	unsigned long long fileSize = std::filesystem::file_size(fileName);
-
 	send(ClientSocket, (char*)&fileSize, sizeof(fileSize), 0);
-	file.close();
 
 	// Use TransmitFile to send the file
 	std::wstring wFileName(fileName.begin(), fileName.end());
-	HANDLE hFile = CreateFile(wFileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE hFile = CreateFile(wFileName.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
 		std::cerr << "CreateFile failed with error: " << GetLastError() << std::endl;
@@ -269,7 +266,8 @@ void processRequest(SOCKET& ClientSocket, std::string& request)
 
 	if (file.is_open())
 	{
-		sendFile(ClientSocket, file, command);
+		do { file.close(); } while (file.is_open());
+		sendFile(ClientSocket, command);
 	}
 	else
 	{

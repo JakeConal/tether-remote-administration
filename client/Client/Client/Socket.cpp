@@ -277,7 +277,7 @@ void chatLoop(SOCKET& ConnectSocket, char* recvbuf, int recvbuflen)
 		{
 			std::cerr << "Unknown response type: " << responseType << std::endl;
 		}
-		std::this_thread::sleep_for(std::chrono::seconds(2));
+		std::this_thread::sleep_for(std::chrono::seconds(10));
 	}
 }
 
