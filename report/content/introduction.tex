@@ -1,1 +1,16 @@
 \section{Giới thiệu}
+
+Ứng dụng điều khiển client-server từ xa thông qua Gmail và giao thức socket là một giải pháp kết hợp giữa công nghệ email và giao tiếp mạng nhằm thực hiện các lệnh điều khiển từ xa một cách đơn giản và hiệu quả. Quy trình hoạt động của hệ thống bao gồm:
+
+\begin{itemize}
+    \item \textbf{Admin} gửi lệnh điều khiển thông qua Gmail đến tài khoản email của \textbf{client}.
+    \item \textbf{Client} tự động đọc email, phân tích nội dung lệnh, sau đó sử dụng socket để truyền lệnh này tới \textbf{server}.
+    \item \textbf{Server} tiếp nhận lệnh, thực thi, xử lý kết quả, và gửi phản hồi lại cho \textbf{client}.
+    \item \textbf{Client} tiếp tục gửi kết quả phản hồi thông qua email tới tài khoản Gmail của \textbf{admin}.
+\end{itemize}
+
+Hệ thống sử dụng Gmail API để thực hiện các thao tác quản lý email như nhận email, xử lý nội dung và gửi email phản hồi. Bên cạnh đó, giao thức socket được sử dụng để thiết lập kết nối trực tiếp giữa \textbf{client} và \textbf{server}, đảm bảo việc truyền tải dữ liệu diễn ra nhanh chóng và chính xác.
+
+Ứng dụng được xây dựng hoàn toàn bằng ngôn ngữ lập trình \textbf{C++}, một ngôn ngữ mạnh mẽ với khả năng xử lý dữ liệu hiệu quả, hỗ trợ lập trình đa luồng và tương tác với các giao thức mạng. Với thiết kế linh hoạt, hệ thống phù hợp để triển khai trong các môi trường yêu cầu điều khiển từ xa, đồng thời đảm bảo tính bảo mật nhờ sử dụng các cơ chế xác thực của Gmail.
+
+\newpage
