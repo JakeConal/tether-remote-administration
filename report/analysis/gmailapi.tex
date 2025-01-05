@@ -1,0 +1,220 @@
+\subsubsection{Lấy Access Token}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{std::string getAccessToken()}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Lấy access token từ Google OAuth 2.0 để sử dụng cho các yêu cầu API tiếp theo.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Access token được sử dụng để xác thực các yêu cầu API đến Gmail. Đây là bước đầu tiên và quan trọng để có thể thực hiện các thao tác khác với Gmail API.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Hàm sử dụng thông tin xác thực đã cấu hình trước (client ID, client secret) để gửi yêu cầu đến máy chủ Google OAuth 2.0.
+        \item Máy chủ trả về access token nếu thông tin xác thực hợp lệ.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item Không có tham số truyền vào.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{std::string}: Chuỗi chứa access token.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Lấy Nội Dung Email}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{std::string getEmail(const std::string\& accessToken, const std::string\& messageId)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Lấy nội dung của một email dựa trên messageId.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Đọc nội dung email từ Gmail. Sử dụng access token để xác thực và messageId để xác định email cụ thể cần đọc.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Hàm gửi yêu cầu HTTP GET đến Gmail API, bao gồm access token để xác thực và messageId để xác định email cần truy xuất.
+        \item Gmail API trả về nội dung của email dưới dạng JSON, và hàm trích xuất nội dung từ phản hồi này.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{accessToken}: Chuỗi chứa access token để xác thực yêu cầu API.
+        \item \texttt{messageId}: Chuỗi chứa ID của email cần đọc.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{std::string}: Chuỗi chứa nội dung của email.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Lấy ID Email Mới Nhất}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{std::string getMessageId(const std::string\& accessToken)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Lấy ID của email mới nhất trong hộp thư đến.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Lấy ID của email để có thể đọc nội dung email đó. Giúp xác định email mới nhất mà người dùng nhận được.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Hàm gửi yêu cầu HTTP GET đến Gmail API, bao gồm access token để xác thực.
+        \item Gmail API trả về danh sách email, và hàm trích xuất ID của email mới nhất từ danh sách này.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{accessToken}: Chuỗi chứa access token để xác thực yêu cầu API.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{std::string}: Chuỗi chứa ID của email mới nhất.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Kiểm Tra Email Từ Admin}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool isAdmin(const std::string\& accessToken, const std::vector<std::string\}\& adminMail, const std::string\& messageId, std::string\& senderMail)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Kiểm tra xem email gửi đến có phải từ admin hay không.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Xác định quyền admin của người gửi email. Đảm bảo rằng chỉ những email từ admin mới được xử lý.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Hàm sử dụng access token và messageId để lấy thông tin email.
+        \item Hàm trích xuất địa chỉ email của người gửi từ nội dung email và so sánh với danh sách \texttt{adminMail}.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{accessToken}: Chuỗi chứa access token để xác thực yêu cầu API.
+        \item \texttt{adminMail}: Vector chứa danh sách các email admin.
+        \item \texttt{messageId}: Chuỗi chứa ID của email cần kiểm tra.
+        \item \texttt{senderMail}: Tham chiếu đến chuỗi để lưu email của người gửi nếu là admin.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu email gửi đến từ admin, ngược lại trả về \texttt{false}.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Gửi Email Đơn Giản}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{void sendEmail(const std::string\& accessToken, const std::string\& to, const std::string\& subject, const std::string\& body)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Gửi một email đơn giản.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Gửi email từ tài khoản Gmail. Sử dụng access token để xác thực và gửi email đến địa chỉ được chỉ định.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Hàm gửi yêu cầu HTTP POST đến Gmail API, bao gồm access token và thông tin email (người nhận, tiêu đề, nội dung).
+        \item Gmail API xử lý yêu cầu và trả về kết quả gửi email.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{accessToken}: Chuỗi chứa access token để xác thực yêu cầu API.
+        \item \texttt{to}: Chuỗi chứa địa chỉ email của người nhận.
+        \item \texttt{subject}: Chuỗi chứa tiêu đề của email.
+        \item \texttt{body}: Chuỗi chứa nội dung của email.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item Không có tham số trả về.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Gửi Email Có Tệp Đính Kèm}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{void sendGmailWithAttachment(const std::string\& accessToken, const std::string\& to, const std::string\& subject, const std::string\& body, const std::string\& attachmentPath)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Gửi một email với tệp đính kèm.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Gửi email từ tài khoản Gmail với tệp đính kèm. Sử dụng access token để xác thực và gửi email đến địa chỉ được chỉ định cùng với tệp đính kèm.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Hàm xây dựng email dưới dạng MIME message, bao gồm tiêu đề, nội dung, và tệp đính kèm.
+        \item Hàm gửi yêu cầu HTTP POST đến Gmail API, bao gồm access token và MIME message.
+        \item Gmail API xử lý yêu cầu và gửi email.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{accessToken}: Chuỗi chứa access token để xác thực yêu cầu API.
+        \item \texttt{to}: Chuỗi chứa địa chỉ email của người nhận.
+        \item \texttt{subject}: Chuỗi chứa tiêu đề của email.
+        \item \texttt{body}: Chuỗi chứa nội dung của email.
+        \item \texttt{attachmentPath}: Chuỗi chứa đường dẫn đến tệp đính kèm.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item Không có tham số trả về.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Mã Hóa Base64}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{std::string base64\_encode(const std::string\& input)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Chuyển đổi chuỗi văn bản hoặc dữ liệu nhị phân thành định dạng base64.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Base64 là định dạng mã hóa phổ biến dùng để truyền dữ liệu qua các giao thức không hỗ trợ dữ liệu nhị phân, ví dụ: email MIME hoặc HTTP.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Chuỗi đầu vào được chia thành các nhóm byte.
+        \item Mỗi nhóm byte được ánh xạ thành các ký tự trong bảng base64.
+        \item Kết quả cuối cùng được làm đầy bằng ký tự `=` để đảm bảo độ dài là bội số của 4.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{input}: Chuỗi cần mã hóa.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{std::string}: Chuỗi được mã hóa dưới dạng base64.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Giải Mã Base64}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{std::string base64\_decode(const std::string\& input)}
+    \item \textbf{Chức năng:} 
+    \begin{itemize}
+        \item Giải mã một chuỗi base64 thành dữ liệu hoặc chuỗi ban đầu.
+    \end{itemize}
+    \item \textbf{Mục đích:} 
+    \begin{itemize}
+        \item Khôi phục dữ liệu từ chuỗi base64 đã mã hóa. Thường được dùng khi xử lý email hoặc tệp đính kèm.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{itemize}
+        \item Các ký tự trong chuỗi base64 được ánh xạ ngược lại thành giá trị nhị phân.
+        \item Các giá trị nhị phân được tổ hợp để khôi phục dữ liệu ban đầu.
+    \end{itemize}
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{input}: Chuỗi base64 cần giải mã.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{std::string}: Chuỗi dữ liệu sau khi giải mã.
+    \end{itemize}
+\end{itemize}
