@@ -12,3 +12,14 @@ vcpkg_installed/
 x64/
 
 Debug/
+
+# latex
+*.aux
+*.log
+*.pdf
+*.synctex.gz
+*.toc
+*.out
+*.fdb_latexmk
+*.fls
+*.gz
