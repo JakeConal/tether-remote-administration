@@ -1,0 +1,487 @@
+\subsubsection{Process}
+\label{subsec:process}
+
+\paragraph{List Processes}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool listProcess(std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Liệt kê tất cả các process đang chạy trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Thông báo cho admin biết các process đang chạy trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Chạy lệnh liệt kê process trên hệ điều hành và lưu output.
+        \item Trả về output cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi liệt kê process.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Start Process}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool startProcess(std::string \&processName, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Khởi động một process trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Thực thi một ứng dụng hoặc script trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Chạy lệnh khởi động process theo
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{processName}: Tên/đường dẫn process cần khởi động.
+        \item \texttt{result}: Chuỗi kết quả sau khi khởi động process.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Kill Process}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool killProcess(std::string \&processName, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Dừng một process đang chạy trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Dừng một ứng dụng hoặc script đang chạy trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Chạy lệnh dừng process theo \texttt{processName}.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{processName}: Tên/đường dẫn process cần dừng.
+        \item \texttt{result}: Chuỗi kết quả sau khi dừng process.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{App}
+\label{subsec:app}
+
+\paragraph{List Applications}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool listApps(std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Liệt kê tất cả các ứng dụng cài đặt trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Thông báo cho admin biết các ứng dụng cài đặt trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Duyệt thư mục lưu các shortcut ứng dụng trên máy.
+        \item Đọc thông tin ứng dụng từ shortcut và lấy tên ứng dụng.
+        \item Trả về tên các ứng dụng cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi liệt kê ứng dụng.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Start Application}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool startApp(std::string \&appName, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Khởi động một ứng dụng trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Mở một ứng dụng cụ thể trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Tìm shortcut của ứng dụng theo \texttt{appName}.
+        \item Trích xuất đường dẫn ứng dụng từ shortcut.
+        \item Chạy lệnh khởi động ứng dụng theo đường dẫn.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{appName}: Tên ứng dụng cần khởi động.
+        \item \texttt{result}: Chuỗi kết quả sau khi khởi động ứng dụng.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Stop Application}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool stopApp(std::string \&appName, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Dừng một ứng dụng đang chạy trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Dừng một ứng dụng cụ thể đang chạy trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Tìm shortcut của ứng dụng theo \texttt{appName}.
+        \item Trích xuất đường dẫn ứng dụng từ shortcut.
+        \item Dừng ứng dụng theo đường dẫn.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{appName}: Tên ứng dụng cần dừng.
+        \item \texttt{result}: Chuỗi kết quả sau khi dừng ứng dụng.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Filesystem}
+\label{subsec:filesystem}
+
+\paragraph{List Files}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool listFiles(std::string \&directory, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Liệt kê tất cả các file và thư mục trong một thư mục.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Thông báo cho admin biết các file và thư mục trong một thư mục.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Chạy lệnh liệt kê file và thư mục trong thư mục \texttt{directory} trên hệ điều hành và lưu output.
+        \item Đánh dấu file và thư mục trong output.
+        \item Trả về output cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{directory}: Đường dẫn thư mục cần liệt kê.
+        \item \texttt{result}: Chuỗi kết quả sau khi liệt kê file và thư mục.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Delete File}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool deleteFile(std::string \&fileName, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Xóa một file hoặc thư mục trên máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Xóa một file hoặc thư mục không cần thiết trên máy.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Chạy lệnh xóa file hoặc thư mục theo \texttt{fileName}.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{filePath}: Đường dẫn file hoặc thư mục cần xóa.
+        \item \texttt{result}: Chuỗi kết quả sau khi xóa file hoặc thư mục.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Copy File}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool copyFile(std::string \&fileNames, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Sao chép một file từ một thư mục đến một thư mục khác.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Sao chép một file từ một thư mục đến một thư mục khác.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Tách chuỗi \texttt{fileNames} thành \texttt{source} và \texttt{destination}.
+        \item Chạy lệnh sao chép file từ \texttt{source} sang \texttt{destination}.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{source}: Đường dẫn file cần sao chép.
+        \item \texttt{destination}: Đường dẫn thư mục đích.
+        \item \texttt{result}: Chuỗi kết quả sau khi sao chép file.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Move File}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool moveFile(std::string \&fileNames, std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Di chuyển một file từ một thư mục đến một thư mục khác.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Di chuyển một file từ một thư mục đến một thư mục khác.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Tách chuỗi \texttt{fileNames} thành \texttt{source} và \texttt{destination}.
+        \item Chạy lệnh di chuyển file từ \texttt{source} sang \texttt{destination}.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{source}: Đường dẫn file cần di chuyển.
+        \item \texttt{destination}: Đường dẫn thư mục đích.
+        \item \texttt{result}: Chuỗi kết quả sau khi di chuyển file.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Screenshot}
+\label{subsec:screenshot}
+
+\paragraph{Capture Screenshot}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool captureScreenshot(std::string \&result, std::ifstream \&in)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Chụp một ảnh chụp màn hình của máy và gửi về cho admin.
+    \end{itemize}
+    \textbf{Mục đích:}
+    \begin{itemize}
+        \item Hiển thị màn hình của máy server cho admin.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Lấy thông số màn hình của máy.
+        \item Tạo con trỏ chứa dữ liệu ảnh.
+        \item Chụp ảnh màn hình và lưu vào con trỏ.
+        \item Lưu dưới dạng file .png.
+        \item Đọc file .png và gửi về cho admin.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi chụp.
+        \item \texttt{in}: File .png
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Webcam}
+\label{subsec:webcam}
+
+\paragraph{Start Webcam}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool startWebcam(std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Bật webcam của máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Quay webcam của máy lưu vào file video.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Tạo một luồng video từ webcam.
+        \item Mở webcam của máy.
+        \item Quay video và lưu vào file .mp4.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi bật webcam.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Stop Webcam}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool stopWebcam(std::string \&result, std::ifstream \&output)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Tắt webcam của máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Dừng quay video từ webcam của máy và gửi về cho admin.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Dừng quay video từ webcam.
+        \item Lưu video vào file .mp4.
+        \item Đọc file .mp4 và gửi về cho admin.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi tắt webcam.
+        \item \texttt{output}: File .mp4
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Keyboard}
+\label{subsec:keyboard}
+
+\paragraph{Lock Keyboard}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool lockKeyboard(std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Khóa bàn phím của máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Ngăn chặn việc nhập liệu từ bàn phím.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Khóa bàn phím của máy. (Yêu cầu quyền admin)
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi khóa bàn phím.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Unlock Keyboard}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool unlockKeyboard(std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Mở khóa bàn phím của máy.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Cho phép nhập liệu từ bàn phím.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Mở khóa bàn phím của máy. (Yêu cầu quyền admin)
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi mở khóa bàn phím.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Start Keylogger}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool startKeylogger(std::string \&result)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Bắt đầu ghi lại các phím được nhấn trên bàn phím.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Ghi lại các phím được nhấn trên bàn phím.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Tạo luồng ghi lại các phím được nhấn trên bàn phím.
+        \item Lưu vào file .txt.
+        \item Trả về kết quả cho hàm gọi.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi bắt đầu ghi lại các phím được nhấn trên bàn phím.
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Stop Keylogger}
+\begin{itemize}
+    \item \textbf{Tên hàm:} \texttt{bool stopKeylogger(std::string \&result, std::ifstream \&output)}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Dừng ghi lại các phím được nhấn trên bàn phím.
+    \end{itemize}
+    \item \textbf{Mục đích:}
+    \begin{itemize}
+        \item Dừng ghi lại các phím được nhấn trên bàn phím và gửi về cho admin.
+    \end{itemize}
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Dừng ghi lại các phím được nhấn trên bàn phím.
+        \item Lưu vào file .txt.
+        \item Đọc file .txt và gửi về cho admin.
+    \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{result}: Chuỗi kết quả sau khi dừng ghi lại các phím được nhấn trên bàn phím.
+        \item \texttt{output}: File .txt
+    \end{itemize}
+    \item \textbf{Tham số trả về:}
+    \begin{itemize}
+        \item \texttt{bool}: Trả về \texttt{true} nếu thành công, \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
