@@ -35,25 +35,28 @@ enum COMMANDS {
 };
 
 const std::map<std::string, COMMANDS> commandMap = {
+	// 1
 	{"list", LIST_PROCESS},
 	{"start", START_PROCESS},
 	{"stop", STOP_PROCESS},
-	{"shutdown", SHUTDOWN},
-	{"restart", RESTART},
+	{"screenshot", CAPTURE_SCREENSHOT},
+
 	{"ls", LIST_FILES},
 	{"delete", DELETE_FILE},
 	{"move", MOVE_FILE},
 	{"copy", COPY_FILE},
-	{"screenshot", CAPTURE_SCREENSHOT},
 	{"start_webcam", START_WEBCAM},
 	{"stop_webcam", STOP_WEBCAM},
+	{"start_keylogger", START_KEYLOGGER},
+	{"stop_keylogger", STOP_KEYLOGGER},
+
 	{"list_app", LIST_APPS},
 	{"start_app", START_APP},
 	{"stop_app", STOP_APP},
-	{"start_keylogger", START_KEYLOGGER},
-	{"stop_keylogger", STOP_KEYLOGGER},
 	{"lock_keyboard", LOCK_KEYBOARD},
-	{"unlock_keyboard", UNLOCK_KEYBOARD}
+	{"unlock_keyboard", UNLOCK_KEYBOARD},
+	{"shutdown", SHUTDOWN},
+	{"restart", RESTART},
 };
 
 const std::map<std::string, std::string> filePaths = {

@@ -8,7 +8,9 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <mswsock.h>
 
+#pragma comment(lib, "Mswsock.lib")
 #pragma comment(lib, "Ws2_32.lib")
 
 // Request
@@ -187,6 +189,8 @@ SOCKET acceptClient(SOCKET& ListenSocket)
 	return ClientSocket;
 }
 
+// Existing code...
+
 void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
 {
 	// Send response type
@@ -207,24 +211,23 @@ void sendFile(SOCKET& ClientSocket, std::ifstream& file, std::string command)
 	unsigned long long fileSize = std::filesystem::file_size(fileName);
 
 	send(ClientSocket, (char*)&fileSize, sizeof(fileSize), 0);
-
-	file.seekg(0, std::ios::beg); // Rewind the file to start sending
-
-	char buffer[DEFAULT_BUFLEN];
-
-	int iResult;
-	while (file.read(buffer, DEFAULT_BUFLEN))
-	{
-		iResult = send(ClientSocket, buffer, DEFAULT_BUFLEN, 0);
-		if (iResult == SOCKET_ERROR)
-		{
-			std::cerr << "Send failed with error: " << WSAGetLastError() << std::endl;
-			break;
-		}
-	}
-	// Send any remaining bytes
-	iResult = send(ClientSocket, buffer, file.gcount(), 0);
 	file.close();
+
+	// Use TransmitFile to send the file
+	std::wstring wFileName(fileName.begin(), fileName.end());
+	HANDLE hFile = CreateFile(wFileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		std::cerr << "CreateFile failed with error: " << GetLastError() << std::endl;
+		return;
+	}
+
+	if (!TransmitFile(ClientSocket, hFile, 0, 0, NULL, NULL, 0))
+	{
+		std::cerr << "TransmitFile failed with error: " << WSAGetLastError() << std::endl;
+	}
+
+	CloseHandle(hFile);
 }
 
 void sendResponse(SOCKET& ClientSocket, std::string& response)

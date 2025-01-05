@@ -125,13 +125,10 @@ std::string handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuf
 	int iResult = recv(ConnectSocket, fileNameBuffer, fileNameLength, 0);
 	if (iResult == SOCKET_ERROR) {
 		std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-		delete[] fileNameBuffer; // Free allocated memory
 		return "";
 	}
 
-	//fileNameBuffer[iResult] = '\0'; // Null-terminate the buffer
 	std::string fileName(fileNameBuffer, fileNameLength);
-	//delete[] fileNameBuffer; // Free allocated memory
 
 	std::cout << "Receiving file: " << fileName << std::endl;
 
@@ -155,34 +152,46 @@ std::string handleFileResponse(SOCKET& ConnectSocket, char* recvbuf, int recvbuf
 	}
 
 	// Allocate buffer for receiving the file
-	unsigned long long bytesReceived = 0;
 	unsigned long long totalReceived = 0;
+	std::wstring wFileName(fileName.begin(), fileName.end());
+	HANDLE hFile = CreateFile(wFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		std::cerr << "CreateFile failed with error: " << GetLastError() << std::endl;
+		return "";
+	}
 
-
-	const int CHUNK_SIZE = 1024 * 64;
-	char* fileBuffer = new char[CHUNK_SIZE];
-	remove(fileName.c_str());
-
-	std::ofstream outFile(fileName, std::ios::app | std::ios::binary);
 	while (totalReceived < fileSize) {
-		size_t bytesToReceive = min(static_cast<size_t>(fileSize - totalReceived), CHUNK_SIZE);
-		bytesReceived = recv(ConnectSocket, fileBuffer, bytesToReceive, 0);
-		if (bytesReceived == SOCKET_ERROR) {
-			std::cerr << "Recv failed with error: " << WSAGetLastError() << std::endl;
-			delete[] fileBuffer;
-			break;
+		// Use TransmitFile to receive the file
+		WSABUF wsabuf;
+		char buffer[DEFAULT_BUFLEN];
+		wsabuf.buf = buffer;
+		wsabuf.len = DEFAULT_BUFLEN;
+
+		DWORD flags = 0;
+		DWORD bytesReceived = 0;
+		iResult = WSARecv(ConnectSocket, &wsabuf, 1, &bytesReceived, &flags, NULL, NULL);
+		if (iResult == SOCKET_ERROR) {
+			std::cerr << "WSARecv failed with error: " << WSAGetLastError() << std::endl;
+			CloseHandle(hFile);
+			return "";
 		}
-		outFile.write(fileBuffer, bytesReceived);
+
+		DWORD bytesWritten = 0;
+		if (!WriteFile(hFile, buffer, bytesReceived, &bytesWritten, NULL)) {
+			std::cerr << "WriteFile failed with error: " << GetLastError() << std::endl;
+			CloseHandle(hFile);
+			return "";
+		}
+
 		totalReceived += bytesReceived;
 		// Print progress bar
 		printProgressBar(totalReceived, fileSize);
 	}
 	std::cout << std::endl;
-	outFile.close();
+	CloseHandle(hFile);
 
 	std::cout << "File received successfully!" << std::endl;
 
-	delete[] fileBuffer;
 	return fileName;
 }
 
