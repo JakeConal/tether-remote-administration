@@ -226,6 +226,38 @@
     \item \textbf{Tham số trả về:} Không có.
 \end{itemize}
 
+\paragraph{\textbf{Khởi động Client}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void startClient();}
+    
+    \item \textbf{Mục đích:} Thiết lập một client sử dụng Winsock để kết nối đến server qua giao thức TCP, sau đó thực hiện giao tiếp giữa client và server.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Khởi tạo Winsock bằng cách gọi hàm \texttt{initializeWinsock}.
+        \item Cấu hình các tham số của socket bằng cách sử dụng cấu trúc \texttt{addrinfo}:
+        \begin{itemize}
+            \item \texttt{ai\_family}: Được đặt là \texttt{AF\_UNSPEC}, cho phép sử dụng cả IPv4 và IPv6.
+            \item \texttt{ai\_socktype}: Được đặt là \texttt{SOCK\_STREAM}, sử dụng giao thức TCP.
+            \item \texttt{ai\_protocol}: Được đặt là \texttt{IPPROTO\_TCP}, chỉ định giao thức TCP.
+        \end{itemize}
+        \item Thực hiện vòng lặp kết nối:
+        \begin{itemize}
+            \item Yêu cầu người dùng nhập địa chỉ IP của server.
+            \item Sử dụng hàm \texttt{getServerAddress} để giải quyết địa chỉ server và cổng.
+            \item Nếu không thể kết nối, hiển thị thông báo lỗi và cho phép người dùng nhập lại địa chỉ IP.
+            \item Nếu kết nối thành công, hiển thị thông báo kết nối thành công.
+        \end{itemize}
+        \item Sau khi kết nối thành công, thực hiện giao tiếp giữa client và server bằng cách gọi hàm \texttt{chatLoop}.
+        \item Dọn dẹp tài nguyên và đóng kết nối bằng cách gọi hàm \texttt{cleanup}.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} Không có.
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+
 \paragraph{\textbf{In thanh tiến trình}}
 \begin{itemize}
     \item \textbf{Prototype:} \texttt{void printProgressBar(int progress, int total);}
@@ -239,7 +271,7 @@
         \item Hiển thị ký tự \texttt{=} cho các phần đã hoàn thành và ký tự \texttt{>} cho phần hiện tại.
         \item Cập nhật thanh tiến trình liên tục trong quá trình công việc diễn ra.
     \end{enumerate}
-    \newpage
+
     \item \textbf{Tham số truyền vào:} 
     \begin{itemize}
         \item \texttt{progress}: Số lượng công việc đã hoàn thành.
@@ -463,6 +495,32 @@
     \begin{itemize}
         \item \texttt{SOCKET\& ClientSocket}: Biến tham chiếu đại diện cho kết nối với client.
     \end{itemize}
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Khởi động Server}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void startServer();}
+    
+    \item \textbf{Mục đích:} Thiết lập một server cơ bản sử dụng thư viện Winsock để lắng nghe và xử lý kết nối từ client.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Khởi tạo Winsock bằng cách gọi hàm \texttt{initializeWinsock} để chuẩn bị môi trường làm việc.
+        \item Thiết lập socket bằng cách:
+        \begin{itemize}
+            \item Giải quyết địa chỉ server với cấu trúc \texttt{addrinfo}.
+            \item Tạo socket lắng nghe (\texttt{ListenSocket}) và liên kết với địa chỉ IP và cổng.
+        \end{itemize}
+        \item In thông tin lắng nghe để xác nhận server đã sẵn sàng nhận kết nối.
+        \item Chấp nhận kết nối từ client bằng cách gọi \texttt{acceptClient}.
+        \item Đóng socket lắng nghe (\texttt{ListenSocket}) vì không còn cần thiết sau khi kết nối đã được thiết lập.
+        \item Xử lý giao tiếp với client bằng cách gọi hàm \texttt{handleClient}.
+        \item Dọn dẹp tài nguyên và đóng kết nối sau khi hoàn thành.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} Không có.
+    
     \item \textbf{Tham số trả về:} Không có.
 \end{itemize}
 
