@@ -26,7 +26,7 @@
 
 \subsubsection{Lấy Nội Dung Email}
 \begin{itemize}
-    \item \textbf{Tên hàm:} \texttt{std::string getEmail(const std::string\& accessToken, const std::string\& messageId)}
+    \item \textbf{Tên hàm:} \texttt{std::string getEmail (const std::string\& accessToken, const \\std::string\& messageId)}
     \item \textbf{Chức năng:} 
     \begin{itemize}
         \item Lấy nội dung của một email dựa trên messageId.
@@ -79,7 +79,8 @@
 
 \subsubsection{Kiểm Tra Email Từ Admin}
 \begin{itemize}
-    \item \textbf{Tên hàm:} \texttt{bool isAdmin(const std::string\& accessToken, const std::vector<std::string\}\& adminMail, const std::string\& messageId, std::string\& senderMail)}
+    \item \textbf{Tên hàm:} 
+    \texttt{bool isAdmin (const std::string\& accessToken, const std::vector<std\\::string>\& adminMail, const std::string\& messageId, std::string\& senderMail)}
     \item \textbf{Chức năng:} 
     \begin{itemize}
         \item Kiểm tra xem email gửi đến có phải từ admin hay không.
@@ -137,7 +138,7 @@
 
 \subsubsection{Gửi Email Có Tệp Đính Kèm}
 \begin{itemize}
-    \item \textbf{Tên hàm:} \texttt{void sendGmailWithAttachment(const std::string\& accessToken, const std::string\& to, const std::string\& subject, const std::string\& body, const std::string\& attachmentPath)}
+    \item \textbf{Tên hàm:} \texttt{void sendGmailWithAttachment(const std::string\& accessToken, const \\std::string\& to, const std::string\& subject, const std::string\& body, const \\std::string\& attachmentPath)}
     \item \textbf{Chức năng:} 
     \begin{itemize}
         \item Gửi một email với tệp đính kèm.
