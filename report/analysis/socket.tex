@@ -1,0 +1,489 @@
+\subsubsection{Client}
+\paragraph{\textbf{Khởi tạo Winsock}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{bool initializeWinsock(WSADATA\& wsaData);}
+    
+    \item \textbf{Mục đích:} Khởi tạo thư viện Winsock để sử dụng các API mạng.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Gọi hàm \texttt{WSAStartup()} để khởi tạo Winsock.
+        \item Kiểm tra lỗi nếu việc khởi tạo thất bại.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{WSADATA\& wsaData}: Một cấu trúc chứa thông tin về phiên bản Winsock được khởi tạo.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} \texttt{true} nếu khởi tạo thành công, \texttt{false} nếu thất bại.
+\end{itemize}
+
+\paragraph{\textbf{Nhập địa chỉ IP server}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{std::string getServerAddressInput();}
+    
+    \item \textbf{Mục đích:} Nhận địa chỉ IP của server từ người dùng.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Hiển thị lời nhắc yêu cầu người dùng nhập địa chỉ IP của server.
+        \item Đọc địa chỉ IP từ bàn phím.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} Không có.
+    
+    \item \textbf{Tham số trả về:} Chuỗi chứa địa chỉ IP của server.
+\end{itemize}
+
+\paragraph{\textbf{Lấy thông tin địa chỉ server}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{addrinfo* getServerAddress(const std::string\& serverAddress, const std::string\& port, const addrinfo\& hints);}
+    
+    \item \textbf{Mục đích:} Lấy thông tin địa chỉ của server từ hệ thống.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Gọi hàm \texttt{getaddrinfo()} để lấy danh sách địa chỉ phù hợp với cấu hình.
+        \item Kiểm tra lỗi và trả về danh sách địa chỉ hoặc thông báo lỗi nếu có.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{serverAddress}: Địa chỉ IP của server.
+        \item \texttt{port}: Cổng mà server sử dụng.
+        \item \texttt{hints}: Cấu hình tìm kiếm thông tin địa chỉ (ví dụ: loại giao thức, kiểu socket).
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Con trỏ đến danh sách thông tin địa chỉ \texttt{addrinfo*}, hoặc \texttt{NULL} nếu thất bại.
+\end{itemize}
+
+\paragraph{\textbf{Kết nối đến server}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{bool connectToServer(SOCKET\& ConnectSocket, addrinfo* result);}
+    
+    \item \textbf{Mục đích:} Thiết lập kết nối từ Client đến Server.
+    
+    \item \textbf{Cách thức hoạt động:}
+    \begin{enumerate}
+        \item Lặp qua các địa chỉ trong danh sách \texttt{result}.
+        \item Tạo socket với các thông tin địa chỉ phù hợp bằng hàm \texttt{socket()}.
+        \item Thực hiện kết nối đến server bằng hàm \texttt{connect()}.
+        \item Đóng socket nếu kết nối không thành công và thử địa chỉ tiếp theo.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket sẽ được sử dụng để kết nối.
+        \item \texttt{result}: Danh sách địa chỉ và cổng của server (từ hàm \texttt{getServerAddress()}).
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} \texttt{true} nếu kết nối thành công, \texttt{false} nếu thất bại.
+\end{itemize}
+
+\paragraph{\textbf{Gửi yêu cầu từ client}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{bool sendClientRequest(SOCKET\& ConnectSocket, const std::string\& request);}
+    
+    \item \textbf{Mục đích:} Gửi yêu cầu từ client đến server qua socket.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Gửi chuỗi yêu cầu bằng hàm \texttt{send()}.
+        \item Kiểm tra lỗi nếu việc gửi thất bại và hiển thị thông báo lỗi.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket kết nối đến server.
+        \item \texttt{request}: Chuỗi yêu cầu cần gửi.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} 
+    \begin{itemize}
+        \item \texttt{true} nếu gửi thành công.
+        \item \texttt{false} nếu thất bại.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{\textbf{Nhận loại phản hồi từ server}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{std::string receiveResponseType(SOCKET\& ConnectSocket, char* recvbuf, int recvbuflen);}
+    
+    \item \textbf{Mục đích:} Xác định loại phản hồi từ server (văn bản hoặc tệp tin).
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Nhận kích thước loại phản hồi qua \texttt{recv()}.
+        \item Nhận dữ liệu mô tả loại phản hồi từ server.
+        \item Kiểm tra lỗi trong quá trình nhận.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket kết nối đến server.
+        \item \texttt{recvbuf}: Bộ đệm để nhận dữ liệu.
+        \item \texttt{recvbuflen}: Kích thước bộ đệm.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Chuỗi xác định loại phản hồi (\texttt{"text"} hoặc \texttt{"file"}).
+\end{itemize}
+
+\paragraph{\textbf{Xử lý phản hồi dạng tệp}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{std::string handleFileResponse(SOCKET\& ConnectSocket, char* recvbuf, int recvbuflen);}
+    
+    \item \textbf{Mục đích:} Nhận và lưu trữ tệp tin được gửi từ server.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Nhận tên tệp và kích thước tệp từ server.
+        \item Mở tệp để ghi dữ liệu.
+        \item Nhận từng phần dữ liệu từ server và ghi vào tệp.
+        \item Hiển thị thanh tiến trình trong quá trình nhận tệp.
+        \item Đóng tệp sau khi hoàn tất.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket kết nối đến server.
+        \item \texttt{recvbuf}: Bộ đệm để nhận dữ liệu.
+        \item \texttt{recvbuflen}: Kích thước bộ đệm.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Tên của tệp tin đã nhận.
+\end{itemize}
+
+\paragraph{\textbf{Xử lý phản hồi dạng văn bản}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{std::string handleTextResponse(SOCKET\& ConnectSocket, char* recvbuf, int recvbuflen);}
+    
+    \item \textbf{Mục đích:} Nhận phản hồi dạng văn bản từ server và in ra màn hình.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Nhận kích thước phản hồi từ server.
+        \item Nhận từng phần của phản hồi và lưu vào bộ đệm.
+        \item In phản hồi ra màn hình.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket kết nối đến server.
+        \item \texttt{recvbuf}: Bộ đệm để nhận dữ liệu.
+        \item \texttt{recvbuflen}: Kích thước bộ đệm.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Chuỗi phản hồi từ server.
+\end{itemize}
+
+\paragraph{\textbf{Vòng lặp giao tiếp}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void chatLoop(SOCKET\& ConnectSocket, char* recvbuf, int recvbuflen);}
+    
+    \item \textbf{Mục đích:} Thực hiện vòng lặp giao tiếp liên tục giữa client và server.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Lấy yêu cầu từ email (tích hợp với Gmail API).
+        \item Gửi yêu cầu đến server bằng hàm \texttt{sendClientRequest()}.
+        \item Nhận phản hồi từ server:
+        \begin{itemize}
+            \item Nếu phản hồi là tệp, sử dụng hàm \texttt{handleFileResponse()} để lưu tệp.
+            \item Nếu phản hồi là văn bản, sử dụng hàm \texttt{handleTextResponse()} để hiển thị.
+        \end{itemize}
+        \item Gửi phản hồi lại email người gửi thông qua Gmail API.
+        \item Lặp lại sau mỗi 10 giây hoặc thoát nếu yêu cầu là \texttt{"exit"}.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket kết nối đến server.
+        \item \texttt{recvbuf}: Bộ đệm để nhận dữ liệu.
+        \item \texttt{recvbuflen}: Kích thước bộ đệm.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Dọn dẹp tài nguyên}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void cleanup(SOCKET\& ConnectSocket);}
+    
+    \item \textbf{Mục đích:} Giải phóng tài nguyên socket và thư viện Winsock.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Đóng socket bằng \texttt{closesocket()}.
+        \item Gọi \texttt{WSACleanup()} để giải phóng Winsock.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{ConnectSocket}: Socket đã sử dụng.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{In thanh tiến trình}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void printProgressBar(int progress, int total);}
+    
+    \item \textbf{Mục đích:} In thanh tiến trình lên màn hình để hiển thị tỷ lệ hoàn thành công việc.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Tính toán tỷ lệ phần trăm dựa trên tiến độ (\texttt{progress}) và tổng số công việc (\texttt{total}).
+        \item Xử lý việc hiển thị thanh tiến trình với chiều rộng cố định.
+        \item Hiển thị ký tự \texttt{=} cho các phần đã hoàn thành và ký tự \texttt{>} cho phần hiện tại.
+        \item Cập nhật thanh tiến trình liên tục trong quá trình công việc diễn ra.
+    \end{enumerate}
+    \newpage
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{progress}: Số lượng công việc đã hoàn thành.
+        \item \texttt{total}: Tổng số công việc cần hoàn thành.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\newpage
+% Server
+\subsubsection{Server}
+
+\paragraph{\textbf{Khởi tạo Winsock}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{bool initializeWinsock(WSADATA\& wsaData);}
+    
+    \item \textbf{Mục đích:} Khởi tạo thư viện Winsock để sử dụng các API mạng.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Gọi hàm \texttt{WSAStartup()} để khởi tạo Winsock.
+        \item Kiểm tra lỗi nếu việc khởi tạo thất bại.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{WSADATA\& wsaData}: Một cấu trúc chứa thông tin về phiên bản Winsock được khởi tạo.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} \texttt{true} nếu khởi tạo thành công, \texttt{false} nếu thất bại.
+\end{itemize}
+
+\paragraph{\textbf{Cấu hình socket}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{bool setupSocket(SOCKET\& ListenSocket, addrinfo*\& result);}
+    
+    \item \textbf{Mục đích:} Tạo và cấu hình socket để chấp nhận kết nối từ client.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Thiết lập thông tin cấu hình cho socket sử dụng \texttt{addrinfo}.
+        \item Gọi hàm \texttt{getaddrinfo()} để lấy thông tin cấu hình.
+        \item Tạo socket bằng \texttt{socket()}.
+        \item Gắn socket với địa chỉ và cổng bằng \texttt{bind()}.
+        \item Bắt đầu lắng nghe kết nối bằng \texttt{listen()}.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ListenSocket}: Biến tham chiếu đại diện cho socket server.
+        \item \texttt{addrinfo*\& result}: Con trỏ lưu trữ thông tin cấu hình socket.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} \texttt{true} nếu cấu hình thành công, \texttt{false} nếu thất bại.
+\end{itemize}
+
+\paragraph{\textbf{In thông tin địa chỉ IP}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void printIPAddress(const sockaddr\_in\& addr);}
+    
+    \item \textbf{Mục đích:} Hiển thị địa chỉ IP và cổng mà server đang lắng nghe.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Sử dụng lệnh \texttt{ipconfig} để lấy thông tin địa chỉ IP.
+        \item Phân tích dữ liệu đầu ra để tìm địa chỉ IPv4.
+        \item Hiển thị thông tin địa chỉ IP và cổng.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{const sockaddr\_in\& addr}: Cấu trúc chứa thông tin địa chỉ IP và cổng.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Hiển thị thông tin lắng nghe của socket}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void printListeningInfo(SOCKET\& ListenSocket);}
+    
+    \item \textbf{Mục đích:} Hiển thị thông tin về địa chỉ IP và cổng mà server đang lắng nghe.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Lấy thông tin địa chỉ liên kết với socket bằng \texttt{getsockname()}.
+        \item Chuyển đổi địa chỉ IP từ dạng nhị phân sang dạng chuỗi bằng \texttt{inet\_ntop()}.
+        \item In thông tin địa chỉ IP và cổng ra màn hình.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ListenSocket}: Biến tham chiếu đại diện cho socket đang lắng nghe kết nối.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Chấp nhận kết nối từ client}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{SOCKET acceptClient(SOCKET\& ListenSocket);}
+    
+    \item \textbf{Mục đích:} Chấp nhận kết nối từ một client.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Gọi hàm \texttt{accept()} để chấp nhận kết nối từ client.
+        \item Kiểm tra lỗi nếu việc chấp nhận kết nối thất bại.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ListenSocket}: Biến tham chiếu đại diện cho socket server đang lắng nghe.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Socket đại diện cho kết nối với client hoặc \texttt{INVALID\_SOCKET} nếu thất bại.
+\end{itemize}
+
+\paragraph{\textbf{Xử lý yêu cầu từ client}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void processRequest(SOCKET\& ClientSocket, std::string\& request);}
+    
+    \item \textbf{Mục đích:} Xử lý yêu cầu từ client và trả về phản hồi phù hợp.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Loại bỏ ký tự không mong muốn khỏi yêu cầu.
+        \item Phân tích cú pháp yêu cầu để xác định lệnh và tham số.
+        \item Gọi hàm xử lý tương ứng dựa trên lệnh nhận được.
+        \item Gửi phản hồi hoặc tệp tin đến client.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ClientSocket}: Biến tham chiếu đại diện cho kết nối với client.
+        \item \texttt{std::string\& request}: Chuỗi chứa yêu cầu từ client.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Gửi tệp tin}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void sendFile(SOCKET\& ClientSocket, std::string command);}
+    
+    \item \textbf{Mục đích:} Gửi tệp tin yêu cầu từ server đến client.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Xác định loại phản hồi và gửi thông tin này đến client.
+        \item Lấy tên tệp tin từ lệnh yêu cầu.
+        \item Gửi tên tệp, kích thước tệp và dữ liệu tệp đến client.
+        \item Sử dụng \texttt{TransmitFile()} để gửi dữ liệu tệp.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ClientSocket}: Biến tham chiếu đại diện cho kết nối với client.
+        \item \texttt{std::string command}: Lệnh chứa tên tệp tin cần gửi.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Gửi phản hồi}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void sendResponse(SOCKET\& ClientSocket, std::string\& response);}
+    
+    \item \textbf{Mục đích:} Gửi phản hồi dạng văn bản đến client.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Xác định loại phản hồi là văn bản.
+        \item Gửi kích thước và nội dung phản hồi đến client.
+        \item Xử lý lỗi nếu quá trình gửi thất bại.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ClientSocket}: Biến tham chiếu đại diện cho kết nối với client.
+        \item \texttt{std::string\& response}: Chuỗi chứa phản hồi cần gửi.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Xử lý kết nối từ client}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void handleClient(SOCKET\& ClientSocket);}
+    
+    \item \textbf{Mục đích:} Quản lý và xử lý kết nối với một client.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Lắng nghe dữ liệu từ client.
+        \item Phân tích và xử lý yêu cầu từ client.
+        \item Đóng kết nối khi client gửi yêu cầu \texttt{exit} hoặc khi lỗi xảy ra.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ClientSocket}: Biến tham chiếu đại diện cho kết nối với client.
+    \end{itemize}
+    
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Dọn dẹp tài nguyên}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{void cleanup(SOCKET\& ClientSocket);}
+    
+    \item \textbf{Mục đích:} Dọn dẹp tài nguyên liên quan đến socket và Winsock.
+    
+    \item \textbf{Cách thức hoạt động:} 
+    \begin{enumerate}
+        \item Đóng socket sử dụng \texttt{closesocket()}.
+        \item Giải phóng thư viện Winsock bằng \texttt{WSACleanup()}.
+    \end{enumerate}
+    
+    \item \textbf{Tham số truyền vào:} 
+    \begin{itemize}
+        \item \texttt{SOCKET\& ClientSocket}: Biến tham chiếu đại diện cho kết nối với client.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
+
+\paragraph{\textbf{Xử lý lệnh từ client}}
+\begin{itemize}
+    \item \textbf{Prototype:} \texttt{static void handleRequest(const std::string\& request, std::string\& response, std::string\& params, std::ifstream\& file);}
+    \item \textbf{Mục đích:} Xử lý yêu cầu từ client và trả về phản hồi phù hợp.
+    \item \textbf{Cách thức hoạt động:}
+          \begin{enumerate}
+            \item Phân tích yêu cầu để xác định lệnh và tham số.
+            \item Gọi hàm xử lý tương ứng dựa trên lệnh nhận được.
+            \item Ghi phản hồi vào chuỗi \texttt{response}.
+            \item Xử lý lỗi nếu có trong quá trình xử lý yêu cầu.
+          \end{enumerate}
+    \item \textbf{Tham số truyền vào:}
+    \begin{itemize}
+        \item \texttt{const std::string\& request}: Chuỗi yêu cầu từ client.
+        \item \texttt{std::string\& response}: Chuỗi chứa phản hồi trả về client.
+        \item \texttt{std::string\& params}: Chuỗi chứa tham số từ yêu cầu.
+        \item \texttt{std::ifstream\& file}: Đối tượng file để đọc dữ liệu từ tệp tin.
+    \end{itemize}
+    \item \textbf{Tham số trả về:} Không có.
+\end{itemize}
