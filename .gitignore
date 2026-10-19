@@ -1,24 +1,39 @@
-*.exe
-*.out
-*.db
-*.txt
-
-*.mp4
-
-.vscode/
+# Build / derived artifacts
 .vs/
-vcpkg_installed/
+build*/
+out/
 x64/
-
 Debug/
+Release/
+vcpkg_installed/
 
-# latex
-*.aux
-*.log
-*.pdf
-*.synctex.gz
-*.toc
-*.out
-*.fdb_latexmk
-*.fls
-*.gz
+# Per-user tool and property files
+.vscode/
+CMakeUserPresets.json
+*.user
+*.suo
+
+# Credentials: never in-tree (design D8: operator config paths stay outside the repo)
+secrets/
+.env
+.env.*
+*.token
+*.key
+*.pem
+admin*.txt
+token.json
+token.toml
+
+# LaTeX intermediates; report/ is historical documentation, keep all .tex sources
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+report/*.pdf
+
+# OS noise
+Thumbs.db
+.DS_Store
