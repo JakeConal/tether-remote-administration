@@ -4,11 +4,11 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 
 ## 1. Repo and build rescue (P1: tooling-only foundation)
 
-- [ ] 1.1 Initialize git at the project root, add `.gitignore` for build directories, user property files, and any credential-bearing files, then create the founding commit preserving the current tree byte-for-byte and tag it `v1.0-final`; verify with `git log`, `git tag --list`, and confirm the v1 sources burn in via `git show v1.0-final --stat`
-- [ ] 1.2 Add a root `CMakeLists.txt` plus skeleton layout (`lib/{protocol,transport,syscalls}`, `console/`, `agent/`, `tests/`, `docs/`) with placeholder C++ targets that compile under MSVC; verify configure and `cmake --build` succeed locally on Windows with a clean build directory
-- [ ] 1.3 Add root vcpkg manifest wiring (minimal dependency set: no OpenCV/cpr yet); verify manifest-mode resolution completes and the placeholder targets still build
-- [ ] 1.4 Choose the test framework (Catch2 v3 vs doctest), record the rationale as a one-paragraph note in `docs/build.md`, and wire it into the manifest; verify the framework target resolves from vcpkg and a trivial test file compiles
-- [ ] 1.5 Add a smoke test exercising one trivial unit and register it with CTest; verify `ctest` reports it passing locally on Windows
+- [x] 1.1 Initialize git at the project root, add `.gitignore` for build directories, user property files, and any credential-bearing files, then create the founding commit preserving the current tree byte-for-byte and tag it `v1.0-final`; verify with `git log`, `git tag --list`, and confirm the v1 sources burn in via `git show v1.0-final --stat`
+- [x] 1.2 Add a root `CMakeLists.txt` plus skeleton layout (`lib/{protocol,transport,syscalls}`, `console/`, `agent/`, `tests/`, `docs/`) with placeholder C++ targets that compile under MSVC; verify configure and `cmake --build` succeed locally on Windows with a clean build directory
+- [x] 1.3 Add root vcpkg manifest wiring (minimal dependency set: no OpenCV/cpr yet); verify manifest-mode resolution completes and the placeholder targets still build
+- [x] 1.4 Choose the test framework (Catch2 v3 vs doctest), record the rationale as a one-paragraph note in `docs/build.md`, and wire it into the manifest; verify the framework target resolves from vcpkg and a trivial test file compiles
+- [x] 1.5 Add a smoke test exercising one trivial unit and register it with CTest; verify `ctest` reports it passing locally on Windows
 - [ ] 1.6 Add `.github/workflows/ci.yml` with a matrix (windows-latest, ubuntu-latest) running configure + build + test using the vcpkg manifest; verify the workflow passes on a pushed branch (commit `build platform` with history showing the v1 -> CI transition)
 
 ## 2. Core structure (P2: one codebase, real targets, config + logging)
