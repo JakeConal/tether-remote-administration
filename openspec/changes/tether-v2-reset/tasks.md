@@ -9,14 +9,14 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 - [x] 1.3 Add root vcpkg manifest wiring (minimal dependency set: no OpenCV/cpr yet); verify manifest-mode resolution completes and the placeholder targets still build
 - [x] 1.4 Choose the test framework (Catch2 v3 vs doctest), record the rationale as a one-paragraph note in `docs/build.md`, and wire it into the manifest; verify the framework target resolves from vcpkg and a trivial test file compiles
 - [x] 1.5 Add a smoke test exercising one trivial unit and register it with CTest; verify `ctest` reports it passing locally on Windows
-- [ ] 1.6 Add `.github/workflows/ci.yml` with a matrix (windows-latest, ubuntu-latest) running configure + build + test using the vcpkg manifest; verify the workflow passes on a pushed branch (commit `build platform` with history showing the v1 -> CI transition)
+- [x] 1.6 Add `.github/workflows/ci.yml` with a matrix (windows-latest, ubuntu-latest) running configure + build + test using the vcpkg manifest; verify the workflow passes on a pushed branch (commit `build platform` with history showing the v1 -> CI transition)
 
 ## 2. Core structure (P2: one codebase, real targets, config + logging)
 
 - [ ] 2.1 Promote skeleton placeholders into real CMake targets (`tether-console`, `tether-agent`, libs `tether-protocol`, `tether-transport`, `tether-syscalls`) with empty service mains; verify all five targets build clean under the CI matrix
-- [ ] 2.2 Implement config file loading for console (address, port, token store path) and agent (console address, agent name, token) with explicit failure on missing/invalid fields; verify unit tests cover valid load, missing field, and malformed JSON paths per design D8
-- [ ] 2.3 Implement structured logging (levels + timestamp + contextual fields including session and seq) replacing bare `cerr` usage in new code; verify a test renders entries with expected fields
-- [ ] 2.4 Confirm v1 sources remain untouched in the working tree at this point (`client/`, `server/` still present per migration plan step 3); verify by tree diff against `v1.0-final`
+- [x] 2.2 Implement config file loading for console (address, port, token store path) and agent (console address, agent name, token) with explicit failure on missing/invalid fields; verify unit tests cover valid load, missing field, and malformed JSON paths per design D8
+- [x] 2.3 Implement structured logging (levels + timestamp + contextual fields including session and seq) replacing bare `cerr` usage in new code; verify a test renders entries with expected fields
+- [x] 2.4 Confirm v1 sources remain untouched in the working tree at this point (`client/`, `server/` still present per migration plan step 3); verify by tree diff against `v1.0-final`
 
 ## 3. Protocol v2 (P3: correctness gets its tests)
 
