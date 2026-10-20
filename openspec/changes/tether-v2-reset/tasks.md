@@ -13,7 +13,7 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 
 ## 2. Core structure (P2: one codebase, real targets, config + logging)
 
-- [ ] 2.1 Promote skeleton placeholders into real CMake targets (`tether-console`, `tether-agent`, libs `tether-protocol`, `tether-transport`, `tether-syscalls`) with empty service mains; verify all five targets build clean under the CI matrix
+- [x] 2.1 Promote skeleton placeholders into real CMake targets (`tether-console`, `tether-agent`, libs `tether-protocol`, `tether-transport`, `tether-syscalls`) with empty service mains; verify all five targets build clean under the CI matrix
 - [x] 2.2 Implement config file loading for console (address, port, token store path) and agent (console address, agent name, token) with explicit failure on missing/invalid fields; verify unit tests cover valid load, missing field, and malformed JSON paths per design D8
 - [x] 2.3 Implement structured logging (levels + timestamp + contextual fields including session and seq) replacing bare `cerr` usage in new code; verify a test renders entries with expected fields
 - [x] 2.4 Confirm v1 sources remain untouched in the working tree at this point (`client/`, `server/` still present per migration plan step 3); verify by tree diff against `v1.0-final`
