@@ -225,11 +225,18 @@ std::filesystem::path locate_agent_binary() {
 #endif
     const std::filesystem::path here = std::filesystem::path(buffer).parent_path();
 
+    // Multi-config generators (MSVC) nest per-config outputs one level deeper
+    // (build/tests/Release for the test, build/agent/Release for the agent),
+    // so both single- and multi-config relatives are probed.
     for (const std::filesystem::path candidate :
          {here / ".." / "agent" / "Release" / "tether-agent.exe",
           here / ".." / "agent" / "Debug" / "tether-agent.exe",
           here / ".." / "agent" / "tether-agent.exe",
-          here / ".." / "agent" / "tether-agent"}) {
+          here / ".." / "agent" / "tether-agent",
+          here / ".." / ".." / "agent" / "Release" / "tether-agent.exe",
+          here / ".." / ".." / "agent" / "Debug" / "tether-agent.exe",
+          here / ".." / ".." / "agent" / "tether-agent.exe",
+          here / ".." / ".." / "agent" / "tether-agent"}) {
         std::error_code ignored;
         if (std::filesystem::exists(candidate, ignored)) {
             return std::filesystem::weakly_canonical(candidate);
