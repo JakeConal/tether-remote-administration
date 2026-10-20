@@ -55,7 +55,7 @@ bool enable_shutdown_privilege() {
     TOKEN_PRIVILEGES privileges = {};
     privileges.PrivilegeCount = 1;
     privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    if (!LookupPrivilegeValueW(nullptr, SE_SHUTDOWN_NAME,
+    if (!LookupPrivilegeValueW(nullptr, L"SeShutdownPrivilege",
                                &privileges.Privileges[0].Luid)) {
         CloseHandle(process_token);
         return false;

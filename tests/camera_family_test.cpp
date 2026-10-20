@@ -133,11 +133,15 @@ tsys::Frame delivered_frame(const tsys::Outcome& outcome) {
     return tsys::decode_png(outcome.file->bytes); // decodable with real pixels
 }
 
-// Waits until the probe reads `expected` (bounded: no long real sleeps).
-void await_probe(const std::atomic<int>& probe, const int expected) {
+// Waits until the probe reads `expected` (bounded: no long real sleeps);
+// the RETURN value reports whether the expected state showed up at all, so
+// a timed-out wait fails loudly at the call site instead of silently letting
+// the next step run with less synchronization than it needs.
+bool await_probe(const std::atomic<int>& probe, const int expected) {
     for (int micros = 0; micros < 2'000'000 && probe.load() != expected; ++micros) {
         std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
+    return probe.load() == expected;
 }
 
 } // namespace
@@ -154,6 +158,13 @@ TEST_CASE("start_webcam succeeds while other commands are served; duplicate star
             });
         tsys::CommandDispatcher dispatcher = dispatcher_with(platform, camera->family);
 
+        // Reset the shared probe BEFORE the start: it is this suite's
+        // file-scope state, and a leftover 1 from the previous platform's
+        // pass would collapse the wait in step 2 to nothing, letting stop
+        // race the worker's first read (this actually flipped once on a
+        // loaded machine - the race, not the registry, was at fault).
+        g_probe.store(0);
+
         // 1. Start: a successful background job (the call returns at once).
         const tsys::Outcome started = dispatcher.dispatch("start_webcam", {});
         REQUIRE(started.ok);
@@ -162,7 +173,7 @@ TEST_CASE("start_webcam succeeds while other commands are served; duplicate star
 
         // 2. The capture continues in the background while the call is idle;
         // waiting here is test-side synchronization, not a command stall.
-        await_probe(g_probe, 1);
+        REQUIRE(await_probe(g_probe, 1));
 
         // 3. Duplicate start: the structured already-running refusal, and
         // the incumbent job is untouched (its slot remains occupied).
@@ -190,7 +201,7 @@ TEST_CASE("start_webcam succeeds while other commands are served; duplicate star
         g_probe.store(0);
         const tsys::Outcome restarted = dispatcher.dispatch("start_webcam", {});
         REQUIRE(restarted.ok);
-        await_probe(g_probe, 1);
+        REQUIRE(await_probe(g_probe, 1));
         const tsys::Outcome stopped_again = dispatcher.dispatch("stop_webcam", {});
         REQUIRE(stopped_again.ok);
         (void)delivered_frame(stopped_again);
@@ -243,7 +254,7 @@ TEST_CASE("a camera device that stops delivering frames surfaces a classified fa
     tsys::CommandDispatcher dispatcher = dispatcher_with(tsys::Platform::Windows, camera->family);
 
     REQUIRE(dispatcher.dispatch("start_webcam", {}).ok);
-    await_probe(g_probe, -1); // the device reached its failure (test-side gate)
+    REQUIRE(await_probe(g_probe, -1)); // the device reached its failure (test-side gate)
     const tsys::Outcome stopped = dispatcher.dispatch("stop_webcam", {});
     REQUIRE_FALSE(stopped.ok);
     CHECK(stopped.code == "execute_failed");
@@ -354,6 +365,10 @@ struct SessionHarness {
 } // namespace
 
 TEST_CASE("background camera job over the wire: further commands are served while it runs") {
+    // The probe is file-scope and shared by the earlier dispatcher-level
+    // cases; a clean 0 here is what makes the wait below meaningful for
+    // THIS job's first read (and the stop that follows deterministic).
+    g_probe.store(0);
     auto harness = SessionHarness::connect();
 
     // Start over the wire; the worker runs on the background thread.
@@ -363,7 +378,7 @@ TEST_CASE("background camera job over the wire: further commands are served whil
     // The capture continues in the background; commands keep being served
     // normally WHILE the job is alive (a closed-set rejection rides the
     // same session here).
-    await_probe(g_probe, 1);
+    REQUIRE(await_probe(g_probe, 1)); // first read began before the stop below
     const tp::CommandView unrelated = harness->issue(tp::Cmd{"totally_unknown", {}});
     CHECK(unrelated.status == tp::CommandStatus::Failed);
 
