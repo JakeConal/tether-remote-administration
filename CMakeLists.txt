@@ -19,6 +19,7 @@ enable_testing()
 
 find_package(doctest CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(CLI11 CONFIG REQUIRED)
 
 add_subdirectory(lib/common)
 add_subdirectory(lib/protocol)

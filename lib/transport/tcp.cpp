@@ -302,6 +302,13 @@ std::vector<std::string> TcpConsoleTransport::registered_identities() const {
     return identities;
 }
 
+// Task 5.1: the CLI's `agents` verb lists through the protocol registry so
+// identities keep appearing with their session state even after a session
+// goes down (registered_identities() only covers live connections).
+std::vector<protocol::RegistryEntry> TcpConsoleTransport::registry_entries() {
+    return registry_.list();
+}
+
 // ---- agent dialer -------------------------------------------------------------
 
 std::int64_t next_backoff_ms(std::int64_t current, const DialPolicy& policy) {

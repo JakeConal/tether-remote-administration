@@ -36,11 +36,11 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 
 ## 5. Operator console CLI (verbs, registry, streams, safety)
 
-- [ ] 5.1 Implement the agent registry backed by session state (live / stale / down) with state transition wiring from the session layer; verify tests per the registry requirement: mixed states listed correctly, re-registration flips down back to live, superseded session goes stale
-- [ ] 5.2 Implement verb parsing and dispatch (`agents`, `exec <agent> <command> [args]`, `cancel <agent> <seq>`) with structured stderr errors and distinguishable exit codes for unknown verb and unknown agent before any dispatch; verify tests per the verb-surface requirement including the scriptable exit-code scenarios
-- [ ] 5.3 Implement stdio streaming: text results to stdout, file results byte-exact to a redirected target file, progress/status to stderr; verify tests run both attached and redirected (piped stdout cleanliness, byte-exact file output per the streams requirement)
-- [ ] 5.4 Implement operator-side confirmation for shutdown, restart, and file deletion (`--yes` / interactive), refusing before dispatch otherwise; verify tests per the confirmation requirement (refused locally with nothing sent; confirmed commands dispatch)
-- [ ] 5.5 Verify an end-to-end CLI-through-protocol integration test: a fake agent over the real session stack executes a command issued via the CLI verbs, result streams to stdout, and stderr stays clean; verify the integration test passes in CTest
+- [x] 5.1 Implement the agent registry backed by session state (live / stale / down) with state transition wiring from the session layer; verify tests per the registry requirement: mixed states listed correctly, re-registration flips down back to live, superseded session goes stale
+- [x] 5.2 Implement verb parsing and dispatch (`agents`, `exec <agent> <command> [args]`, `cancel <agent> <seq>`) with structured stderr errors and distinguishable exit codes for unknown verb and unknown agent before any dispatch; verify tests per the verb-surface requirement including the scriptable exit-code scenarios
+- [x] 5.3 Implement stdio streaming: text results to stdout, file results byte-exact to a redirected target file, progress/status to stderr; verify tests run both attached and redirected (piped stdout cleanliness, byte-exact file output per the streams requirement)
+- [x] 5.4 Implement operator-side confirmation for shutdown, restart, and file deletion (`--yes` / interactive), refusing before dispatch otherwise; verify tests per the confirmation requirement (refused locally with nothing sent; confirmed commands dispatch)
+- [x] 5.5 Verify an end-to-end CLI-through-protocol integration test: a fake agent over the real session stack executes a command issued via the CLI verbs, result streams to stdout, and stderr stays clean; verify the integration test passes in CTest
 
 ## 6. Commands and capability matrix (P5: the 19 commands, both OSes)
 

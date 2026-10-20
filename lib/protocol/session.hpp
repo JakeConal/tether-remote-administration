@@ -216,13 +216,31 @@ private:
 };
 
 // ---- Identity registration (secure-session delta: one live session per
-// identity). Task 5.1 builds the full registry on top of this later. --------
+// identity). -----------------------------------------------------------------
+
+// 5.1: the CLI-facing listing state. It is DERIVED at query time from each
+// bound session's state machine - the registry never keeps a parallel copy of
+// the state, so the listing cannot drift from the session layer:
+//   Established  -> live   (authenticated and eligible)
+//   Stale        -> stale  (superseded but still connected)
+//   Connecting / Down -> down (down for disconnected or detected-dead
+//                                 agents; the transport never registers a
+//                                 Connecting session, the bucket is a net)
+enum class RegistryState { Live, Stale, Down };
+const char* registry_state_name(RegistryState state);
+
+// One listing row: an identity plus the derived state of one tracked session.
+struct RegistryEntry {
+    std::string identity;
+    RegistryState state = RegistryState::Down;
+};
 
 class AgentRegistry {
 public:
     // Registers (or replaces) the session bound to `identity`; returns
     // whether an older live session was superseded (marked stale). Distinct
-    // identities simply coexist.
+    // identities simply coexist. Superseded-but-connected sessions keep
+    // showing up in list() as stale until they go down (5.1).
     bool register_session(const std::string& identity,
                           const std::shared_ptr<ConsoleSession>& session);
 
@@ -233,8 +251,23 @@ public:
 
     std::size_t size() const noexcept { return by_identity_.size(); }
 
+    // 5.1 listing accessors (spec: live/stale/down, listing changes as the
+    // sessions change).
+    bool has_agent(const std::string& identity) const;
+    // Derived registry state of an identity's newest session; an unknown
+    // identity reports Down.
+    RegistryState state_of(const std::string& identity) const;
+    // One row per identity (the newest session's state), sorted by identity,
+    // followed by one `stale` row per still-connected superseded session of
+    // that identity. Superseded sessions that went down are pruned here (their
+    // listing life ends with the connection).
+    std::vector<RegistryEntry> list();
+
 private:
     std::map<std::string, std::shared_ptr<ConsoleSession>> by_identity_;
+    // Superseded-but-tracked sessions per identity (5.1), pruned as they go
+    // down. The newest session always lives in by_identity_.
+    std::map<std::string, std::vector<std::shared_ptr<ConsoleSession>>> superseded_;
 };
 
 } // namespace tether::protocol

@@ -99,6 +99,10 @@ public:
     std::shared_ptr<protocol::ConsoleSession> session_for(const std::string& identity) const;
     std::vector<std::string> registered_identities() const;
 
+    // 5.1 listing: the protocol AgentRegistry's derived live/stale/down rows
+    // (identities sorted; superseded-but-connected sessions as stale rows).
+    std::vector<protocol::RegistryEntry> registry_entries();
+
 private:
     struct Connection {
         std::unique_ptr<TcpByteStream> stream;

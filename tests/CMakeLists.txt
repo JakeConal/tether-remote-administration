@@ -45,3 +45,28 @@ add_test(NAME gmail-test COMMAND tether-gmail-tests)
 add_executable(tether-transport-equiv-tests transport_equiv_test.cpp)
 target_link_libraries(tether-transport-equiv-tests PRIVATE doctest::doctest tether-transport tether-protocol tether-common)
 add_test(NAME transport-equiv-test COMMAND tether-transport-equiv-tests)
+
+# Phase 5: operator console CLI (appended per task 5.1-5.5; one TU per suite).
+add_executable(tether-registry-tests registry_test.cpp)
+target_link_libraries(tether-registry-tests PRIVATE doctest::doctest tether-protocol)
+add_test(NAME registry-test COMMAND tether-registry-tests)
+
+# Task 5.2: verb surface, exit codes, dispatch contract (fake console).
+add_executable(tether-cli-verb-tests cli_verb_test.cpp)
+target_link_libraries(tether-cli-verb-tests PRIVATE doctest::doctest tether-cli tether-protocol)
+add_test(NAME cli-verb-test COMMAND tether-cli-verb-tests)
+
+# Task 5.3: stdout/stderr streaming and byte-exact files (fake console).
+add_executable(tether-cli-stream-tests cli_stream_test.cpp)
+target_link_libraries(tether-cli-stream-tests PRIVATE doctest::doctest tether-cli tether-protocol)
+add_test(NAME cli-stream-test COMMAND tether-cli-stream-tests)
+
+# Task 5.4: destructive-command confirmation gate (fake console).
+add_executable(tether-cli-confirm-tests cli_confirm_test.cpp)
+target_link_libraries(tether-cli-confirm-tests PRIVATE doctest::doctest tether-cli tether-protocol)
+add_test(NAME cli-confirm-test COMMAND tether-cli-confirm-tests)
+
+# Task 5.5: end-to-end CLI-through-protocol over the real session stack.
+add_executable(tether-cli-integration-tests cli_integration_test.cpp)
+target_link_libraries(tether-cli-integration-tests PRIVATE doctest::doctest tether-cli tether-protocol tether-transport tether-common)
+add_test(NAME cli-integration-test COMMAND tether-cli-integration-tests)

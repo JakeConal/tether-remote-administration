@@ -645,12 +645,41 @@ void AgentSession::go_down(std::string reason) {
 
 // ---- AgentRegistry ----------------------------------------------------------
 
+const char* registry_state_name(RegistryState state) {
+    switch (state) {
+        case RegistryState::Live: return "live";
+        case RegistryState::Stale: return "stale";
+        case RegistryState::Down: return "down";
+    }
+    return "unknown";
+}
+
+namespace {
+
+// 5.1: the registry listing reads the session layer's own state machine - no
+// parallel registry state to keep in sync.
+RegistryState registry_state_of(const ConsoleSession& session) {
+    switch (session.state()) {
+        case SessionState::Established: return RegistryState::Live;
+        case SessionState::Stale: return RegistryState::Stale;
+        case SessionState::Connecting:
+        case SessionState::Down:
+            return RegistryState::Down;
+    }
+    return RegistryState::Down;
+}
+
+} // namespace
+
 bool AgentRegistry::register_session(const std::string& identity,
                                      const std::shared_ptr<ConsoleSession>& session) {
     bool superseded = false;
     const auto it = by_identity_.find(identity);
     if (it != by_identity_.end() && it->second->state() == SessionState::Established) {
         it->second->mark_stale();
+        // The older session remains tracked (connected) for the listing until
+        // it goes down or is itself replaced.
+        superseded_[identity].push_back(it->second);
         superseded = true;
     }
     by_identity_[identity] = session;
@@ -660,6 +689,38 @@ bool AgentRegistry::register_session(const std::string& identity,
 std::shared_ptr<ConsoleSession> AgentRegistry::lookup(const std::string& identity) const {
     const auto it = by_identity_.find(identity);
     return it != by_identity_.end() ? it->second : nullptr;
+}
+
+bool AgentRegistry::has_agent(const std::string& identity) const {
+    return by_identity_.find(identity) != by_identity_.end();
+}
+
+RegistryState AgentRegistry::state_of(const std::string& identity) const {
+    const auto it = by_identity_.find(identity);
+    return it != by_identity_.end() ? registry_state_of(*it->second) : RegistryState::Down;
+}
+
+std::vector<RegistryEntry> AgentRegistry::list() {
+    std::vector<RegistryEntry> rows;
+    for (const auto& entry : by_identity_) {
+        rows.push_back(RegistryEntry{entry.first, registry_state_of(*entry.second)});
+        // Superseded-but-connected sessions list as stale rows behind the
+        // identity's current session; down ones exit the listing.
+        const auto bench = superseded_.find(entry.first);
+        if (bench == superseded_.end()) {
+            continue;
+        }
+        bench->second.erase(std::remove_if(bench->second.begin(), bench->second.end(),
+                                           [](const std::shared_ptr<ConsoleSession>& stale) {
+                                               return stale->state() == SessionState::Down;
+                                           }),
+                            bench->second.end());
+        for (const auto& tracking : bench->second) {
+            (void)tracking; // superseded-but-connected: one stale row per entry
+            rows.push_back(RegistryEntry{entry.first, RegistryState::Stale});
+        }
+    }
+    return rows;
 }
 
 } // namespace tether::protocol
