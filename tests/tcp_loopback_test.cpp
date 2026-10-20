@@ -262,9 +262,13 @@ SpawnedAgent spawn_tether_agent(const std::string& console_host, std::uint16_t c
     const std::string command_line =
         "\"" + exe.string() + "\" --config \"" + config_path.string() + "\"";
 #if defined(_WIN32)
+    // CreateProcessA takes (and may rewrite) a mutable LPSTR command line, so
+    // the command rides a writable buffer instead of string::data() (const).
+    std::vector<char> cmd_buf(command_line.begin(), command_line.end());
+    cmd_buf.push_back('\0');
     STARTUPINFOA startup{};
     startup.cb = sizeof(startup);
-    REQUIRE(CreateProcessA(nullptr, command_line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+    REQUIRE(CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, FALSE, 0, nullptr,
                            nullptr, &startup, &spawned.process));
 #else
     spawned.process = ::fork();
