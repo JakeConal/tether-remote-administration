@@ -8,6 +8,17 @@
     "nlohmann-json",
     "asio",
     "cpr",
-    "cli11"
+    "cli11",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "png",
+        { "name": "jpeg", "platform": "windows" },
+        { "name": "v4l", "platform": "linux" },
+        { "name": "dshow", "platform": "windows" },
+        { "name": "msmf", "platform": "windows" }
+      ]
+    }
   ]
 }

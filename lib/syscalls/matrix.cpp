@@ -1,9 +1,14 @@
 // lib/syscalls/matrix.cpp - the matrix data and the dispatch layer's
-// implementation (task 6.1), plus the family glue for the two families
-// implemented in this build: process (task 6.2) and file (task 6.3). The
-// glue owns only argument-shape validation and result formatting; every
-// system effect goes through the family interface as typed data.
+// implementation (task 6.1), plus the family glue for the families
+// implemented in this build: process (task 6.2), file (task 6.3), power
+// (task 6.4), capture (task 6.5) and camera (task 6.6). The glue owns only
+// argument-shape validation and result formatting; every system effect goes
+// through the family interface as typed data.
 #include "matrix.hpp"
+
+#include "camera.hpp"
+#include "capture.hpp"
+#include "power.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -29,15 +34,15 @@ const std::vector<CommandSpec> kCommandSet = {
     {"delete",          Family::File,    true,  true, true},
     {"move",            Family::File,    true,  true, true},
     {"copy",            Family::File,    true,  true, true},
-    // power family (task 6.4): implementation lands later; the matrix rows
-    // exist now so shutdown/restart resolve to the structured unsupported
-    // result instead of wedging or crashing.
+    // power family (task 6.4): ExitWindowsEx on Windows, logind over D-Bus
+    // on Linux; destructive rows live behind the agent-layer confirm gate.
     {"shutdown",        Family::Power,   true,  true, true},
     {"restart",         Family::Power,   true,  true, true},
-    // capture family (task 6.5): GDI on Windows, X11 grab on Linux; Wayland
-    // returns the structured unsupported result through the same rows.
+    // capture family (task 6.5): GDI BitBlt on Windows, X11 XGetImage on
+    // Linux; a Wayland-only host is the structured no-display refusal.
     {"screenshot",      Family::Capture, false, true, true},
-    // camera family (task 6.6): managed background jobs, both OSes.
+    // camera family (task 6.6): managed background jobs over the shared
+    // registry (jobs.hpp), cv::VideoCapture as the production source.
     {"start_webcam",    Family::Camera,  false, true, true},
     {"stop_webcam",     Family::Camera,  false, true, true},
     // input family (task 6.7): Windows first, X11 on Linux; Wayland gaps
@@ -72,6 +77,18 @@ bool is_all_digits(const std::string& text) {
            std::all_of(text.begin(), text.end(), [](char c) {
                return c >= '0' && c <= '9';
            });
+}
+
+// Exact-match lookup against `table` (the same closed-verb rule as
+// find_command, but scoped to the dispatcher's OWN table - the default
+// table is exactly command_set(), while tests may pin rows per platform).
+const CommandSpec* find_in(const std::vector<CommandSpec>& table, const std::string& verb) {
+    for (const CommandSpec& spec : table) {
+        if (verb == spec.verb) {
+            return &spec;
+        }
+    }
+    return nullptr; // outside the closed set - exact match or nothing
 }
 
 // A pid parses exactly, with no leading/trailing overflow past uint32.
@@ -221,6 +238,98 @@ Outcome file_copy(IFileSystem& filesystem, const std::vector<std::string>& argv)
     return outcome;
 }
 
+// ---- family glue: power (task 6.4) -------------------------------------------
+//
+// The dispatcher's step 4 already held every unconfirmed destructive call
+// (the gate is live for `shutdown`/`restart` rows since task 6.1); the glue
+// running here means the token WAS present - the family performs the
+// authorized request and the outcome reports its result.
+
+Outcome power_shutdown(IPowerControl& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "shutdown takes no arguments beyond the confirmation token, got " +
+                               std::to_string(argv.size()));
+    }
+    control.shutdown();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("shutdown initiated");
+    outcome.lines.push_back("the operating system owns the transition from here");
+    return outcome;
+}
+
+Outcome power_restart(IPowerControl& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "restart takes no arguments beyond the confirmation token, got " +
+                               std::to_string(argv.size()));
+    }
+    control.restart();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("restart initiated");
+    outcome.lines.push_back("the operating system owns the transition from here");
+    return outcome;
+}
+
+// ---- family glue: capture (task 6.5) ------------------------------------------
+
+Outcome capture_screenshot(IScreenCapture& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "screenshot takes no arguments, got " + std::to_string(argv.size()));
+    }
+    // The family returns the byte-complete, named PNG; the session layer
+    // streams it through the FILE_META/FILE_CHUNK/FILE_END channel.
+    const Outcome::Deliverable deliverable = control.grab();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("captured the screen as " + deliverable.name);
+    outcome.file = deliverable;
+    return outcome;
+}
+
+// ---- family glue: camera (task 6.6) --------------------------------------------
+
+Outcome camera_start(ICameraCapture& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "start_webcam takes no arguments, got " + std::to_string(argv.size()));
+    }
+    // Occupied slot -> the structured already-running refusal (the running
+    // job is untouched - spec: "duplicate start is refused with a
+    // structured result").
+    control.start_job();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("camera job started");
+    outcome.lines.push_back("the capture runs in the background; stop_webcam stops it and delivers the image");
+    return outcome;
+}
+
+Outcome camera_stop(ICameraCapture& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "stop_webcam takes no arguments, got " + std::to_string(argv.size()));
+    }
+    // "job stop releases and delivers the accumulated capture": the stop
+    // terminates the job's thread and the latest frame rides outcome.file
+    // (byte-complete + named). Nothing running / a failed job throws the
+    // not_running / execute_failed classifications.
+    const Outcome::Deliverable deliverable = control.stop_job();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("camera job stopped; delivered " + deliverable.name);
+    outcome.file = deliverable;
+    return outcome;
+}
+
 } // namespace
 
 // ---- matrix accessors ---------------------------------------------------------
@@ -287,23 +396,42 @@ void CommandDispatcher::set_file_system(std::shared_ptr<IFileSystem> impl) {
     file_ = std::move(impl);
 }
 
+void CommandDispatcher::set_power_control(std::shared_ptr<IPowerControl> impl) {
+    power_ = std::move(impl);
+}
+
+void CommandDispatcher::set_screen_capture(std::shared_ptr<IScreenCapture> impl) {
+    capture_ = std::move(impl);
+}
+
+void CommandDispatcher::set_camera_capture(std::shared_ptr<ICameraCapture> impl) {
+    camera_ = std::move(impl);
+}
+
 bool CommandDispatcher::family_available(Family family) const {
     switch (family) {
         case Family::Process: return process_ != nullptr;
         case Family::File: return file_ != nullptr;
-        // The remaining families are wired by their OWNING tasks (6.4-6.8);
-        // no implementation exists in this build yet, so their verbs get the
-        // structured unsupported resolution at step 3 of dispatch().
+        case Family::Power: return power_ != nullptr;
+        case Family::Capture: return capture_ != nullptr;
+        case Family::Camera: return camera_ != nullptr;
+        // Input and app are wired by their OWNING tasks (6.7-6.8); until
+        // then their verbs resolve to the structured unsupported result at
+        // step 3 of dispatch().
         default: return false;
     }
 }
 
 Outcome CommandDispatcher::dispatch(const std::string& verb,
                                     const std::vector<std::string>& args) const try {
-    // 1. The closed set: rejection happens here, BEFORE any capability is
-    // touched, so an unknown verb has no system effect by construction. The
-    // structured error names the offending verb (remote-commands delta).
-    const CommandSpec* spec = find_command(verb);
+    // 1. The closed set, honoured against the dispatcher's OWN table: the
+    // default table is exactly command_set(), so wired behavior is the
+    // production closed set; an injected table (tests pin platform rows)
+    // is what the platform gap resolves through. Rejection happens here,
+    // BEFORE any capability is touched, so an unknown verb has no system
+    // effect by construction. The structured error names the offending
+    // verb (remote-commands delta).
+    const CommandSpec* spec = find_in(table_, verb);
     if (spec == nullptr) {
         return refuse("unknown_command", "unknown command '" + verb + "'");
     }
@@ -363,9 +491,21 @@ Outcome CommandDispatcher::dispatch(const std::string& verb,
                 return file_move(*file_, argv);
             }
             return file_copy(*file_, argv);
-        // Unreachable: steps 2-3 already resolved every other family to the
-        // structured unsupported result, and the table contains no other
-        // families. The catch-all below still guarantees classification.
+        case Family::Power:
+            // Unreachable with null families: step 3 refused first.
+            if (verb == "shutdown") {
+                return power_shutdown(*power_, argv);
+            }
+            return power_restart(*power_, argv);
+        case Family::Capture:
+            return capture_screenshot(*capture_, argv);
+        case Family::Camera:
+            if (verb == "start_webcam") {
+                return camera_start(*camera_, argv);
+            }
+            return camera_stop(*camera_, argv);
+        // Input/app families resolve earlier (step 3) while their tasks are
+        // pending; the catch-all below still guarantees classification.
         default:
             break;
     }

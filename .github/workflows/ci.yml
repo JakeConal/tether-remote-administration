@@ -22,6 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Task 6.5: the Linux capture family grabs the screen through X11, so
+      # the test leg needs the dev headers (libx11-dev) at configure/build
+      # and an X server (xvfb-run) at test time for the "produced screenshot
+      # is a decodable image" scenario.
+      - name: Install X11 headers and xvfb (Linux leg)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev xvfb
+
       # Both runner families ship vcpkg preinstalled at VCPKG_INSTALLATION_ROOT.
       - name: Configure (vcpkg manifest mode)
         shell: bash
@@ -36,4 +45,9 @@ jobs:
 
       - name: Test
         shell: bash
-        run: ctest --test-dir build --output-on-failure -C $BUILD_TYPE
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a ctest --test-dir build --output-on-failure -C $BUILD_TYPE
+          else
+            ctest --test-dir build --output-on-failure -C $BUILD_TYPE
+          fi

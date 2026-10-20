@@ -95,6 +95,37 @@ add_executable(tether-file-tests file_family_test.cpp)
 target_link_libraries(tether-file-tests PRIVATE doctest::doctest tether-syscalls)
 add_test(NAME file-family-test COMMAND tether-file-tests)
 
+# Task 6.4: the power family. Refusal path tested against the REAL per-OS
+# family (nothing executes behind the gate); the confirmed path rides
+# fake/injected backends only - no test ever triggers a real power
+# transition on any platform (task 6.4 binding).
+add_executable(tether-power-tests power_family_test.cpp)
+target_link_libraries(tether-power-tests PRIVATE doctest::doctest tether-syscalls)
+add_test(NAME power-family-test COMMAND tether-power-tests)
+
+# Task 6.5: the capture family. The injected-source cases run on both legs;
+# the REAL per-OS grab (GDI desktop / X11) runs where its server exists -
+# the Linux leg is wrapped in xvfb-run in CI, WSL runs under WSLg.
+add_executable(tether-capture-tests capture_family_test.cpp)
+target_link_libraries(tether-capture-tests PRIVATE doctest::doctest tether-syscalls)
+add_test(NAME capture-family-test COMMAND tether-capture-tests)
+
+# Task 6.5: the capture benchmark (NOT a ctest). Executed manually on a
+# desktop session; the recorded decision lives in docs/capture-notes.md.
+if(UNIX)
+    add_executable(tether-capture-bench capture_bench.cpp)
+    target_link_libraries(tether-capture-bench PRIVATE tether-syscalls)
+endif()
+
+# Task 6.6: the camera family over OpenCV with the shared background-job
+# registry lifecycle; all device interaction rides injected fake sources
+# (CI runners have no webcams). The session-level lifecycle case runs the
+# real session stack (the same harness command-session-test wires).
+add_executable(tether-camera-tests camera_family_test.cpp)
+target_link_libraries(tether-camera-tests
+    PRIVATE doctest::doctest tether-command-handler tether-syscalls)
+add_test(NAME camera-family-test COMMAND tether-camera-tests)
+
 # Tasks 6.1-6.3 wiring: the dispatcher behind a REAL session pair over
 # in-memory pipes (fakes for process, real temporary disk for file).
 add_executable(tether-command-session-tests command_session_test.cpp)

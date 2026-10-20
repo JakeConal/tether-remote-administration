@@ -22,9 +22,12 @@
 // family interface as data (see process.hpp / file.hpp).
 //
 // The dispatcher is also the extension point for the remaining families:
-// `set_power_control` / capture / camera / input / app slots land with their
-// owning tasks (6.4-6.8). Until then those verbs dispatch to the structured
-// unsupported result below - the definitive, non-wedging resolution.
+// power / capture / camera landed (6.4-6.6, real interfaces in power.hpp /
+// capture.hpp / camera.hpp - wired through `set_power_control` /
+// `set_screen_capture` / `set_camera_capture`); input / app slots land with
+// their owning tasks (6.7-6.8). Until then those verbs dispatch to the
+// structured unsupported result below - the definitive, non-wedging
+// resolution.
 #pragma once
 
 #include "errors.hpp"
@@ -60,8 +63,11 @@ const char* family_name(Family family); // "process" | ... (refusal text)
 //   invalid_args         verb present but the argument shape is malformed
 //   not_found / access_denied / directory_not_empty / already_exists /
 //     cross_device / execute_failed  (see errors.hpp for the family codes)
-//   internal_error       an unexpected failure was converted, never leaked
-//                        as an unclassified outcome
+//   already_running  a background-job start arrived for a running job
+//                    (camera start_webcam; later the input family)
+//   not_running      a background-job stop arrived with nothing running
+//   internal_error   an unexpected failure was converted, never leaked
+//                    as an unclassified outcome
 struct Outcome {
     bool ok = false;
     std::string code = "internal_error";
@@ -103,27 +109,15 @@ const CommandSpec* find_command(const std::string& verb);
 
 bool supported_on(const CommandSpec& spec, Platform platform);
 
-// Family interfaces for the families whose implementations land in later
-// tasks (6.4 power, 6.5 capture, 6.6 camera, 6.7 input, 6.8 app). They exist
-// NOW so every verb of the closed set already maps to a family interface and
-// dispatches to one definitive outcome; each task grows its interface with
-// its operations and registers the implementation through its dispatcher
-// setter. Until then the family's verbs resolve to the structured
-// unsupported result - never to a crash or a silent no-op.
-class IPowerControl {  // shutdown/restart land with task 6.4
-public:
-    virtual ~IPowerControl() = default;
-};
-
-class IScreenCapture { // screenshot lands with task 6.5
-public:
-    virtual ~IScreenCapture() = default;
-};
-
-class ICameraCapture { // camera jobs land with task 6.6
-public:
-    virtual ~ICameraCapture() = default;
-};
+// Family interfaces for the families implemented in this build. The file
+// and process families are defined in their own headers (included above);
+// power (power.hpp), capture (capture.hpp) and camera (camera.hpp) are
+// declared here, defined there, and wired through the setters on
+// CommandDispatcher below. Input (6.7) / app (6.8) remain the
+// task-6.1 stubs until their owning tasks grow them.
+class IPowerControl;
+class IScreenCapture;
+class ICameraCapture;
 
 class IInputControl {  // keylogger / keyboard lock land with task 6.7
 public:
@@ -149,6 +143,11 @@ public:
     // unsupported refusal (this is the state between family tasks).
     void set_process_control(std::shared_ptr<IProcessControl> impl);
     void set_file_system(std::shared_ptr<IFileSystem> impl);
+    // 6.4 power, 6.5 capture, 6.6 camera (the camera implementation owns
+    // its shared background-job registry internally - see camera.hpp).
+    void set_power_control(std::shared_ptr<IPowerControl> impl);
+    void set_screen_capture(std::shared_ptr<IScreenCapture> impl);
+    void set_camera_capture(std::shared_ptr<ICameraCapture> impl);
 
     // THE dispatch entry: one definitive Outcome for ANY (verb, args), in
     // this order of checks, each refusing without touching any capability:
@@ -173,6 +172,9 @@ private:
     const std::vector<CommandSpec>& table_;
     std::shared_ptr<IProcessControl> process_;
     std::shared_ptr<IFileSystem> file_;
+    std::shared_ptr<IPowerControl> power_;
+    std::shared_ptr<IScreenCapture> capture_;
+    std::shared_ptr<ICameraCapture> camera_;
 };
 
 } // namespace tether::syscalls
