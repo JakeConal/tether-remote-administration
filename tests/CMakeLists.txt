@@ -28,3 +28,20 @@ add_test(NAME handshake-test COMMAND tether-handshake-tests)
 add_executable(tether-session-tests session_test.cpp)
 target_link_libraries(tether-session-tests PRIVATE doctest::doctest tether-protocol)
 add_test(NAME session-test COMMAND tether-session-tests)
+
+# Phase 4: transports (appended per task 4.1-4.4; same one-TU-per-suite rule).
+add_executable(tether-base64-tests base64_test.cpp)
+target_link_libraries(tether-base64-tests PRIVATE doctest::doctest tether-common)
+add_test(NAME base64-test COMMAND tether-base64-tests)
+
+add_executable(tether-tcp-tests tcp_loopback_test.cpp)
+target_link_libraries(tether-tcp-tests PRIVATE doctest::doctest tether-transport tether-protocol)
+add_test(NAME tcp-loopback-test COMMAND tether-tcp-tests)
+
+add_executable(tether-gmail-tests gmail_test.cpp)
+target_link_libraries(tether-gmail-tests PRIVATE doctest::doctest tether-transport tether-protocol tether-common)
+add_test(NAME gmail-test COMMAND tether-gmail-tests)
+
+add_executable(tether-transport-equiv-tests transport_equiv_test.cpp)
+target_link_libraries(tether-transport-equiv-tests PRIVATE doctest::doctest tether-transport tether-protocol tether-common)
+add_test(NAME transport-equiv-test COMMAND tether-transport-equiv-tests)

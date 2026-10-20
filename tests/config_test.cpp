@@ -170,3 +170,172 @@ TEST_CASE("agent config example shape with empty token loads") {
     const tether::common::AgentConfig config = tether::common::load_agent_config(path);
     CHECK(config.token.empty());
 }
+
+// ---- Phase 4 additions (additive): console gmail section + agent dial port ----
+
+TEST_CASE("console config without a gmail section stays TCP-only") {
+    const std::string path = write_config("console-no-gmail.json", kValidConsole);
+    const tether::common::ConsoleConfig config = tether::common::load_console_config(path);
+    CHECK_FALSE(config.gmail.has_value()); // disabled by absence, not by default
+}
+
+TEST_CASE("console config with a disabled gmail section loads structured-but-off") {
+    const std::string path = write_config("console-gmail-disabled.json", R"json({
+      "listen_address": "127.0.0.1",
+      "port": 47474,
+      "token_store_path": "tokens.json",
+      "gmail": {
+        "enabled": false
+      }
+    })json");
+    const tether::common::ConsoleConfig config = tether::common::load_console_config(path);
+    REQUIRE(config.gmail.has_value());
+    CHECK(config.gmail->enabled == false);
+}
+
+TEST_CASE("console config with an enabled gmail section loads every field") {
+    const std::string path = write_config("console-gmail-enabled.json", R"json({
+      "listen_address": "127.0.0.1",
+      "port": 47474,
+      "token_store_path": "tokens.json",
+      "gmail": {
+        "enabled": true,
+        "credentials_path": "C:/absolute/outside/repo/gmail-credentials.json",
+        "poll_interval_seconds": 30,
+        "admin_list": ["admin@example.com", "boss@example.com"],
+        "default_agent": "agent-lab-1"
+      }
+    })json");
+    const tether::common::ConsoleConfig config = tether::common::load_console_config(path);
+    REQUIRE(config.gmail.has_value());
+    REQUIRE(config.gmail->enabled);
+    CHECK(config.gmail->credentials_path == "C:/absolute/outside/repo/gmail-credentials.json");
+    CHECK(config.gmail->poll_interval_seconds == 30);
+    CHECK(config.gmail->admin_list.size() == 2);
+    CHECK(config.gmail->admin_list[0] == "admin@example.com");
+    CHECK(config.gmail->default_agent == "agent-lab-1");
+}
+
+TEST_CASE("gmail section field and range problems fail explicitly") {
+    {
+        const std::string path = write_config("gmail-interval-zero.json", R"json({
+          "listen_address": "127.0.0.1",
+          "port": 47474,
+          "token_store_path": "tokens.json",
+          "gmail": {
+            "enabled": true,
+            "credentials_path": "/tmp/creds.json",
+            "poll_interval_seconds": 0,
+            "admin_list": ["admin@example.com"],
+            "default_agent": "agent-lab-1"
+          }
+        })json");
+        const std::string message = load_error_message_console(path);
+        REQUIRE_FALSE(message.empty());
+        CHECK(message.find("'gmail.poll_interval_seconds'") != std::string::npos);
+    }
+    {
+        const std::string path = write_config("gmail-admin-empty.json", R"json({
+          "listen_address": "127.0.0.1",
+          "port": 47474,
+          "token_store_path": "tokens.json",
+          "gmail": {
+            "enabled": true,
+            "credentials_path": "/tmp/creds.json",
+            "poll_interval_seconds": 30,
+            "admin_list": [],
+            "default_agent": "agent-lab-1"
+          }
+        })json");
+        const std::string message = load_error_message_console(path);
+        REQUIRE_FALSE(message.empty());
+        CHECK(message.find("'gmail.admin_list'") != std::string::npos);
+    }
+    {
+        const std::string path = write_config("gmail-missing-creds.json", R"json({
+          "listen_address": "127.0.0.1",
+          "port": 47474,
+          "token_store_path": "tokens.json",
+          "gmail": {
+            "enabled": true,
+            "poll_interval_seconds": 30,
+            "admin_list": ["admin@example.com"],
+            "default_agent": "agent-lab-1"
+          }
+        })json");
+        const std::string message = load_error_message_console(path);
+        REQUIRE_FALSE(message.empty());
+        CHECK(message.find("credentials_path") != std::string::npos);
+    }
+    {
+        const std::string path = write_config("gmail-object-broken.json", R"json({
+          "listen_address": "127.0.0.1",
+          "port": 47474,
+          "token_store_path": "tokens.json",
+          "gmail": "yes"
+        })json");
+        const std::string message = load_error_message_console(path);
+        REQUIRE_FALSE(message.empty());
+        CHECK(message.find("'gmail'") != std::string::npos);
+        CHECK(message.find("object") != std::string::npos);
+    }
+}
+
+TEST_CASE("agent console_port defaults to the documented port when absent") {
+    const std::string path = write_config("agent-no-port.json", kValidAgent);
+    const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+    CHECK(config.console_port == 47474);
+}
+
+TEST_CASE("agent console_port loads when present and validates its type and range") {
+    {
+        const std::string path = write_config("agent-port.json", R"json({
+          "console_address": "127.0.0.1",
+          "console_port": 50999,
+          "agent_name": "agent-lab-1",
+          "token": "example-token"
+        })json");
+        const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+        CHECK(config.console_port == 50999);
+    }
+    {
+        const std::string path = write_config("agent-port-string.json", R"json({
+          "console_address": "127.0.0.1",
+          "console_port": "50999",
+          "agent_name": "agent-lab-1",
+          "token": "example-token"
+        })json");
+        const std::string message = load_error_message_agent(path);
+        REQUIRE_FALSE(message.empty());
+        CHECK(message.find("'console_port'") != std::string::npos);
+    }
+    {
+        const std::string path = write_config("agent-port-range.json", R"json({
+          "console_address": "127.0.0.1",
+          "console_port": 70000,
+          "agent_name": "agent-lab-1",
+          "token": "example-token"
+        })json");
+        const std::string message = load_error_message_agent(path);
+        REQUIRE_FALSE(message.empty());
+        CHECK(message.find("'console_port'") != std::string::npos);
+    }
+}
+
+TEST_CASE("agent instance_id is optional and loads when present") {
+    {
+        const std::string path = write_config("agent-no-instance.json", kValidAgent);
+        const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+        CHECK(config.instance_id.empty()); // defaults to agent_name at the consumer
+    }
+    {
+        const std::string path = write_config("agent-instance.json", R"json({
+          "console_address": "127.0.0.1",
+          "agent_name": "agent-lab-1",
+          "instance_id": "host-lab-01",
+          "token": "example-token"
+        })json");
+        const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+        CHECK(config.instance_id == "host-lab-01");
+    }
+}

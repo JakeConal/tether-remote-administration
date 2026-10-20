@@ -5,6 +5,8 @@
   "dependencies": [
     "mbedtls",
     "doctest",
-    "nlohmann-json"
+    "nlohmann-json",
+    "asio",
+    "cpr"
   ]
 }

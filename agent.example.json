@@ -1,5 +1,7 @@
 {
   "console_address": "127.0.0.1",
+  "console_port": 47474,
   "agent_name": "agent-lab-1",
+  "instance_id": "host-lab-01",
   "token": ""
 }
