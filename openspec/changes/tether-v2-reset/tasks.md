@@ -32,7 +32,7 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 - [x] 4.2 Implement the Gmail adapter: OAuth refresh-token flow reading credentials from the configured path, polling at the configured interval, exponential backoff on API errors per the adapter deltas; verify unit tests (network mocked) for poll cadence bounds and backoff behavior
 - [x] 4.3 Implement Gmail inbound acceptance (sender on configured admin list + destination adapter account) and MIME command parsing plus result delivery with attachments; verify unit tests (network mocked): non-admin mail ignored without executing or affecting cadence, admin mail becomes a well-formed protocol command, file results ship as MIME attachments, and text results reply to the requesting admin
 - [x] 4.4 Add transport-equivalence tests issuing the same commands through both transports behind the transport interface (Gmail mocked) and a TCP-only configuration test asserting no Gmail polling occurs; verify `ctest` green including the TCP-only scenario
-- [ ] 4.5 Remove `client/` and `server/` from the working tree now that protocol v2 is proven end-to-end (migration plan step 3), keeping `report/` untouched; verify the tree diff shows only those directories removed, history still contains `v1.0-final`, and the build passes after removal
+- [x] 4.5 Remove `client/` and `server/` from the working tree now that protocol v2 is proven end-to-end (migration plan step 3), keeping `report/` untouched; verify the tree diff shows only those directories removed, history still contains `v1.0-final`, and the build passes after removal
 
 ## 5. Operator console CLI (verbs, registry, streams, safety)
 
