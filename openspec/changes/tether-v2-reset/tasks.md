@@ -24,7 +24,7 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 - [x] 3.2 Implement JSON payload handling for the message types (`HELLO`, `CHALLENGE`, `AUTH_OK`, `CMD`, `RESULT_TEXT`, `FILE_META`, `FILE_CHUNK`, `FILE_END`, `CANCEL`, `PING`/`PONG`, `ERR`) with per-type field validation; verify unit tests reject malformed payload shapes per type
 - [x] 3.3 Implement the HMAC challenge-response handshake over a provisioned token (nonce -> HMAC verify -> `AUTH_OK`) per design D4; verify tests that correct tokens pass, wrong answers fail, and replayed nonces are rejected
 - [x] 3.4 Implement sequence correlation plus `CANCEL`, `PING`/`PONG`, and per-command timeouts as a session state machine per the `secure-session` delta; verify tests that concurrent commands keep results attributed to their own seq, timeout or cancel marks one command failed without poisoning the session, and keepalive marks dead sessions down beyond the configured window
-- [ ] 3.5 Wire the whole protocol suite into CTest as the boundary test suite; verify `ctest` green locally on Windows and commit so CI exercises the same suite on ubuntu-latest, and check the CI log for the Linux run
+- [x] 3.5 Wire the whole protocol suite into CTest as the boundary test suite; verify `ctest` green locally on Windows and commit so CI exercises the same suite on ubuntu-latest, and check the CI log for the Linux run
 
 ## 4. Transports (P4: TCP live end-to-end, Gmail adapter, v1 removal)
 
