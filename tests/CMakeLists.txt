@@ -70,3 +70,34 @@ add_test(NAME cli-confirm-test COMMAND tether-cli-confirm-tests)
 add_executable(tether-cli-integration-tests cli_integration_test.cpp)
 target_link_libraries(tether-cli-integration-tests PRIVATE doctest::doctest tether-cli tether-protocol tether-transport tether-common)
 add_test(NAME cli-integration-test COMMAND tether-cli-integration-tests)
+
+# Phase 6: commands and capability matrix (appended per task 6.1-6.4; one TU
+# per suite). tether-argv-probe is not a test: it is the tiny child the
+# process-family suite launches to observe argv verbatim.
+add_executable(tether-argv-probe probe_child.cpp)
+
+# Task 6.1: closed-set rejection, matrix refusals, definitive outcomes
+# (recording fakes only - no sockets, no children, no disk).
+add_executable(tether-matrix-tests matrix_test.cpp)
+target_link_libraries(tether-matrix-tests PRIVATE doctest::doctest tether-syscalls)
+add_test(NAME matrix-test COMMAND tether-matrix-tests)
+
+# Task 6.2: the process family over its real per-OS implementation. The
+# suite locates the probe next to its own binary (repo probing pattern).
+add_executable(tether-process-tests process_family_test.cpp)
+target_link_libraries(tether-process-tests PRIVATE doctest::doctest tether-syscalls)
+add_dependencies(tether-process-tests tether-argv-probe)
+add_test(NAME process-family-test COMMAND tether-process-tests)
+
+# Task 6.3: the file family on real temporary disk with the agent-layer
+# confirmation gate (dispatcher-level, identical gates to the wired agent).
+add_executable(tether-file-tests file_family_test.cpp)
+target_link_libraries(tether-file-tests PRIVATE doctest::doctest tether-syscalls)
+add_test(NAME file-family-test COMMAND tether-file-tests)
+
+# Tasks 6.1-6.3 wiring: the dispatcher behind a REAL session pair over
+# in-memory pipes (fakes for process, real temporary disk for file).
+add_executable(tether-command-session-tests command_session_test.cpp)
+target_link_libraries(tether-command-session-tests
+    PRIVATE doctest::doctest tether-command-handler tether-syscalls tether-common)
+add_test(NAME command-session-test COMMAND tether-command-session-tests)

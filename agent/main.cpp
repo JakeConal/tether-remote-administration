@@ -1,13 +1,16 @@
-// tether-agent entry point (design D1).
-// Phase 4 scope: initialize the structured logger, load the config file, and
-// run the dial-out transport loop - HTTP-style connect retries with bounded
-// exponential backoff, then the P3 agent session state machine (handshake,
-// keepalive, seq correlation) riding the TCP transport. Command EXECUTION is
-// Phase 5: no handler is installed here, so inbound commands receive the
-// protocol layer's structured ERR("no_handler") reply and the session stays
-// usable.
+// tether-agent entry point (design D1). Phase 4 scope: initialize the
+// structured logger, load the config file, and run the dial-out transport
+// loop - HTTP-style connect retries with bounded exponential backoff, then
+// the P3 agent session state machine (handshake, keepalive, seq correlation)
+// riding the TCP transport. Phase 6 adds the command surface (tasks 6.1-6.3):
+// the capability-matrix dispatcher runs behind each session, with the
+// process and file families live; verbs of the not-yet-implemented families
+// resolve through the same dispatcher to the structured unsupported result,
+// so the command set is already complete at this thin entry point.
+#include "command_handler.hpp"
 #include "config.hpp"
 #include "logging.hpp"
+#include "matrix.hpp"
 #include "session.hpp"
 #include "tcp.hpp"
 #include "transport.hpp"
@@ -71,6 +74,14 @@ int main(int argc, char* argv[]) {
     // "retries connection attempts at a bounded interval instead of exiting").
     const transport::DialPolicy policy{};
 
+    // Phase 6 (tasks 6.1-6.3): the closed-set dispatcher behind every
+    // session. Process and file families are live; power/capture/camera/
+    // input/app verbs resolve to the structured unsupported result until
+    // their family tasks land (6.4-6.8 route through this same object).
+    tether::syscalls::CommandDispatcher dispatcher;
+    dispatcher.set_process_control(tether::syscalls::make_process_control());
+    dispatcher.set_file_system(tether::syscalls::make_file_system());
+
     for (;;) {
         std::unique_ptr<transport::TcpAgentLink> link;
         try {
@@ -81,6 +92,9 @@ int main(int argc, char* argv[]) {
             log.error("dial-out gave up unexpectedly", {{"error", error.what()}});
             return 1;
         }
+        // The dispatcher outlives every link, so install is safe across
+        // redials (the handler runs only inside its own session's pump).
+        tether::agent::install_commands(dispatcher, *link);
         transport::TransportMillis now = steady_now_ms();
         log.info("dial-out connected; starting session",
                  {{"agent", identity.name}, {"state", protocol::session_state_name(link->state())}});
