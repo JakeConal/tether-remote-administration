@@ -142,6 +142,12 @@ TEST_CASE("a confirmed shutdown/restart proceeds exactly once with the token str
 }
 
 // ---- the Linux logind backend over the injectable binding ---------------------
+//
+// The backend and the binding exist only on Linux; on Windows the system bus
+// and sd-bus are structurally meaningless, so these two cases compile only
+// where the backend does (the binding stays injectable and fake-injected
+// everywhere it exists - no test ever triggers a real system call).
+#if !defined(_WIN32)
 
 TEST_CASE("the logind backend routes confirmed calls through the injected binding") {
     const auto binding = std::make_shared<FakeLogindBinding>();
@@ -187,6 +193,8 @@ TEST_CASE("a logind outage refuses the confirmed call with a structured outcome 
         REQUIRE(listing.ok); // the dispatcher was never wedged by the refusal
     }
 }
+
+#endif // !defined(_WIN32) - the logind backend is Linux-only by platform
 
 // ---- outcome authority ----------------------------------------------------------
 
