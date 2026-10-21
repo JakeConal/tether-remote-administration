@@ -11,6 +11,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
     add_compile_options(/W4 /permissive- /EHsc)
+    # The code deliberately uses the portable standard C++ `getenv` (the
+    # values are non-secret paths read once at startup, not credentials).
+    # MSVC deprecates it in favour of the non-portable `_dupenv_s`; silence
+    # that deprecation instead of forking the API per platform.
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()

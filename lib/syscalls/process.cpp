@@ -233,11 +233,6 @@ void ensure_children_are_autoreaped() {
     (void)installed;
 }
 
-bool process_directory_exists(std::uint32_t pid) {
-    std::error_code ec;
-    return std::filesystem::exists("/proc/" + std::to_string(pid), ec) && !ec;
-}
-
 // The argv[0] base name, falling back to the comm name (kernel threads and
 // zombies have an empty cmdline but a live comm entry).
 std::string read_process_name(std::uint32_t pid) {
@@ -270,25 +265,6 @@ std::string read_process_name(std::uint32_t pid) {
         }
     }
     return "unknown";
-}
-
-// Drains exactly `count` bytes (exec reports ride short pipe writes).
-bool read_fully(int fd, unsigned char* dst, std::size_t count) {
-    std::size_t done = 0;
-    while (done < count) {
-        const ssize_t got = ::read(fd, dst + done, count - done);
-        if (got < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return false;
-        }
-        if (got == 0) {
-            return false;
-        }
-        done += static_cast<std::size_t>(got);
-    }
-    return true;
 }
 
 // Bounded micro-wait (the stop grace loop): milliseconds, via nanosleep so

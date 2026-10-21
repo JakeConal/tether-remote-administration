@@ -196,8 +196,8 @@ void TcpConsoleTransport::begin_accept() {
                                                               std::move(pending_socket_), "agent");
                 auto session = std::make_shared<protocol::ConsoleSession>(
                     *stream, *stream, options_.session, options_.resolve_token);
-                connections_.push_back(
-                    Connection{std::move(stream), std::move(session), "", false, false});
+                connections_.push_back(Connection{std::move(stream), std::move(session), "",
+                                                 false, false, std::nullopt});
                 Logger::instance().info("console accepted a connection",
                                         {{"sessions", std::to_string(connections_.size())}});
             }

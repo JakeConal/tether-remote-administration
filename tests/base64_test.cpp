@@ -70,3 +70,16 @@ TEST_CASE("binary round-trips survive all lengths") {
         }
     }
 }
+
+TEST_CASE("text round-trips through the string API in both alphabets") {
+    // The string API is what the Gmail command-body decoder and the MIME
+    // encoder call: it must survive the round trip in both alphabets, and
+    // the unpadded form must decode to the same text.
+    check_roundtrip("");
+    check_roundtrip("a");
+    check_roundtrip("ab");
+    check_roundtrip("abc");
+    check_roundtrip("tether console << agent >> result");
+    check_roundtrip("tether console << agent >> result", /*url_safe=*/true);
+    check_roundtrip("binary-ish \x01\x02\x7f payload");
+}

@@ -214,7 +214,7 @@ TEST_CASE("encoder rejects payloads past the bound per type") {
 }
 
 TEST_CASE("unknown version is rejected and poisons the stream") {
-    for (const unsigned char bad_version : {0, 1, 3}) {
+    for (const unsigned char bad_version : {0u, 1u, 3u}) {
         auto wire = encode_of(MsgType::Hello, 5u, payload_from("{}"));
         wire[0] = bad_version;
 
