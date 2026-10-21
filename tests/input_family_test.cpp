@@ -269,7 +269,10 @@ TEST_CASE("duplicate start is the structured already_running refusal") {
     REQUIRE(dispatcher.dispatch("start_keylogger", {}).ok);
     const std::size_t sinks_after_first = harness.built_sinks.size();
 
-    const tsys::Outcome duplicate = dispatcher.dispatch("start_keylogger", {"/tmp/other.log"});
+    // The duplicate is refused after the pre-seat sink build. The storage
+    // path is plain data here: a RELATIVE one works on every platform
+    // (an absolute spelling is meant for the unopenable-path scenario).
+    const tsys::Outcome duplicate = dispatcher.dispatch("start_keylogger", {"other.log"});
     REQUIRE(!duplicate.ok);
     CHECK(duplicate.code == "already_running");
     CHECK(harness.registry->running(tsys::BackgroundJobRegistry::kInputSlot));

@@ -233,7 +233,8 @@ TEST_CASE("windows: the app family lists, launches and stops Start-menu entries"
                                 L" argv --with \"tail quoted\" a;b c|d"));
     fs::create_directories(fixtures.dir / "Nested");
     REQUIRE(create_shortcut(fixtures.dir / L"Nested" / L"Echo B.lnk", target,
-                            L"alive --until --stopped"));
+                            L"alive " + widen_utf8(fixtures.touchfile.string().c_str()) +
+                                L" --until --stopped"));
     {
         std::ofstream plain(fixtures.dir / "not-a-launcher.txt", std::ios::binary);
         plain << "ignored\n";
@@ -245,17 +246,14 @@ TEST_CASE("windows: the app family lists, launches and stops Start-menu entries"
     dispatcher.set_app_launcher(tsys::make_app_launcher_with_roots({fixtures.root}, processes));
 
     // list: every .lnk under (and under subdirectories of) the root, sorted
-    // by name; non-shortcuts contribute nothing.
+    // by name; non-shortcuts contribute nothing. The row reads "name path"
+    // and names can contain spaces (checked with the path prefix, never a
+    // whitespace split).
     const tsys::Outcome listed = dispatcher.dispatch("list_app", {});
     REQUIRE(listed.ok);
-    std::vector<std::string> names;
-    for (const std::string& line : listed.lines) {
-        REQUIRE(!line.empty());
-        names.push_back(line.substr(0, line.find(' ')));
-    }
-    REQUIRE(names.size() == 2);
-    CHECK(names[0] == "Echo A");
-    CHECK(names[1] == "Echo B");
+    REQUIRE(listed.lines.size() == 2);
+    CHECK(listed.lines[0].rfind("Echo A ", 0) == 0);
+    CHECK(listed.lines[1].rfind("Echo B ", 0) == 0);
     CHECK(listed.lines[0].find(fixtures.root + "\\Echo A.lnk") != std::string::npos);
     CHECK(listed.lines[1].find(fixtures.root + "\\Nested\\Echo B.lnk") != std::string::npos);
 
