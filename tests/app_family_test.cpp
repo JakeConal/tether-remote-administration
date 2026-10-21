@@ -98,6 +98,23 @@ bool poll_until(const std::function<bool()>& condition, int budget_ms) {
     }
 }
 
+// TerminateProcess is asynchronous on Windows: the kernel process object can
+// outlive a just-requested termination briefly, and a second stop on that pid
+// still opens the object ("access_denied") instead of resolving "not_found".
+// Wait for the object to clear before asserting the terminal outcome.
+bool process_gone(std::uint32_t pid) {
+#if defined(_WIN32)
+    HANDLE handle = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
+    if (handle == nullptr) {
+        return true;
+    }
+    ::CloseHandle(handle);
+    return false;
+#else
+    return ::kill(static_cast<pid_t>(pid), 0) != 0 && errno == ESRCH;
+#endif
+}
+
 std::vector<std::string> read_lines(const fs::path& path) {
     std::ifstream in(path, std::ios::binary);
     std::vector<std::string> lines;
@@ -284,7 +301,10 @@ TEST_CASE("windows: the app family lists, launches and stops Start-menu entries"
     REQUIRE(stopped.ok);
     CHECK(stopped.lines.front().find("stopped pid " + std::to_string(b_pid)) != std::string::npos);
 
-    // stop after termination: the structured not_found outcome.
+    // stop after termination: the structured not_found outcome. The first
+    // stop only REQUESTS termination on Windows, so wait for the kernel
+    // process object to clear before expecting not_found.
+    REQUIRE(poll_until([&] { return process_gone(b_pid); }, 15000));
     const tsys::Outcome stopped_again = dispatcher.dispatch("stop_app", {std::to_string(b_pid)});
     CHECK(!stopped_again.ok);
     CHECK(stopped_again.code == "not_found");
@@ -377,7 +397,10 @@ TEST_CASE("linux: the app family lists, launches and stops .desktop entries") {
     REQUIRE(stopped.ok);
     CHECK(stopped.lines.front().find("stopped pid " + std::to_string(b_pid)) != std::string::npos);
 
-    // stop after termination: the structured not_found outcome.
+    // stop after termination: the structured not_found outcome. The first
+    // stop only REQUESTS termination on Windows, so wait for the kernel
+    // process object to clear before expecting not_found.
+    REQUIRE(poll_until([&] { return process_gone(b_pid); }, 15000));
     const tsys::Outcome stopped_again = dispatcher.dispatch("stop_app", {std::to_string(b_pid)});
     CHECK(!stopped_again.ok);
     CHECK(stopped_again.code == "not_found");
