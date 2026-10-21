@@ -200,7 +200,7 @@ public:
 
     void close() override {
         if (hook_ != nullptr) {
-            UnhookWindowsHookExW(hook_);
+            UnhookWindowsHookEx(hook_); // not an A/W pair: the base name only
             hook_ = nullptr;
             active_ = nullptr;
         }
