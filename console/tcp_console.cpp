@@ -27,11 +27,40 @@ TcpOperConsole::TcpOperConsole(transport::TcpConsoleTransport& borrowed, Clock c
     : transport_(&borrowed), clock_(std::move(clock)), side_pump_(std::move(side_pump)) {}
 
 std::vector<protocol::RegistryEntry> TcpOperConsole::list_agents() {
+    // Listing waits for a dial-in the same way exec/cancel do: an empty
+    // ephemeral registry most likely means the agent's bounded dial-out loop
+    // has not caught this invocation's listener yet, not that it is gone.
+    wait_for_dial([this] { return !transport_->registry_entries().empty(); });
     return transport_->registry_entries();
 }
 
 bool TcpOperConsole::has_agent(const std::string& identity) {
+    if (transport_->session_for(identity) != nullptr) {
+        return true;
+    }
+    // The registry fills on transition into Established (transport pump), so
+    // driving the pump here lets the agent's next dial out register and be
+    // served inside this same invocation.
+    wait_for_dial([this, &identity] { return transport_->session_for(identity) != nullptr; });
     return transport_->session_for(identity) != nullptr;
+}
+
+void TcpOperConsole::wait_for_dial(const std::function<bool()>& ready) {
+    if (agent_dial_budget_ms_ <= 0) {
+        return;
+    }
+    const transport::TransportMillis deadline = clock_() + agent_dial_budget_ms_;
+    for (;;) {
+        const transport::TransportMillis now = clock_();
+        transport_->pump(now);
+        if (side_pump_) {
+            side_pump_();
+        }
+        if (ready() || now >= deadline) {
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
 }
 
 std::optional<protocol::CommandView> TcpOperConsole::dispatch(

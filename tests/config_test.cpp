@@ -173,10 +173,42 @@ TEST_CASE("agent config example shape with empty token loads") {
 
 // ---- Phase 4 additions (additive): console gmail section + agent dial port ----
 
-TEST_CASE("console config without a gmail section stays TCP-only") {
-    const std::string path = write_config("console-no-gmail.json", kValidConsole);
+TEST_CASE("console config without a gmail section stays TCP-only") {    const std::string path = write_config("console-no-gmail.json", kValidConsole);
     const tether::common::ConsoleConfig config = tether::common::load_console_config(path);
     CHECK_FALSE(config.gmail.has_value()); // disabled by absence, not by default
+}
+
+TEST_CASE("console agent_dial_wait_ms defaults to one agent backoff cycle when absent") {
+    const std::string path = write_config("console-dial-wait-absent.json", kValidConsole);
+    const tether::common::ConsoleConfig config = tether::common::load_console_config(path);
+    CHECK(config.agent_dial_wait_ms == 10000); // one full 500 ms..10 s dial-out cycle
+}
+
+TEST_CASE("console agent_dial_wait_ms accepts 0 to disable the dial-in wait") {
+    const std::string path = write_config("console-dial-wait-zero.json", R"json({
+      "listen_address": "127.0.0.1",
+      "port": 47474,
+      "token_store_path": "tokens.json",
+      "agent_dial_wait_ms": 0
+    })json");
+    const tether::common::ConsoleConfig config = tether::common::load_console_config(path);
+    CHECK(config.agent_dial_wait_ms == 0);
+}
+
+TEST_CASE("console agent_dial_wait_ms rejects negatives and non-integers, naming the field") {
+    for (const char* bad : {"-1", "true", "1.5", "\"soon\""}) {
+        const std::string text = std::string(R"json({
+          "listen_address": "127.0.0.1",
+          "port": 47474,
+          "token_store_path": "tokens.json",
+          "agent_dial_wait_ms": )json") + bad + R"json(
+        })json";
+        const std::string path = write_config("console-dial-wait-bad.json", text);
+        const std::string message = load_error_message_console(path);
+        CHECK_MESSAGE(!message.empty(), "agent_dial_wait_ms value ", bad, " loaded");
+        CHECK_MESSAGE(message.find("agent_dial_wait_ms") != std::string::npos,
+                      "offending value: ", bad);
+    }
 }
 
 TEST_CASE("console config with a disabled gmail section loads structured-but-off") {

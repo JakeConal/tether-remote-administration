@@ -45,12 +45,22 @@ struct GmailSectionConfig {
 //                     a set path turns on console-side audit records
 //                     (executed/refused/failed commands and background-job
 //                     lifecycle events persist there and re-load on open).
+// - agent_dial_wait_ms: how long a one-shot console invocation waits for the
+//                     targeted agent (or any agent, for the listing verb) to
+//                     dial in and register before the unknown-agent refusal.
+//                     The agent dials out forever on a bounded backoff
+//                     (500 ms doubling to a 10 s cap), so this budget is the
+//                     practical coupling of dial-out with the one-verb-per-
+//                     invocation runtime shape (console/main.cpp). Absent ->
+//                     10000 ms (covers one full backoff cycle); 0 disables
+//                     the wait.
 struct ConsoleConfig {
     std::string listen_address;
     int port = 0;
     std::string token_store_path;
     std::optional<GmailSectionConfig> gmail;
     std::optional<std::string> audit_path;
+    int agent_dial_wait_ms = 10000;
 };
 
 // Fields for the agent (target side), see docs: agent.example.json.

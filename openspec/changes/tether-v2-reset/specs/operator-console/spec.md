@@ -50,6 +50,17 @@ Shutdown, restart, and file-deletion commands SHALL be refused at the console be
 - **WHEN** the same command is issued with explicit confirmation
 - **THEN** the console dispatches the command, and the agent's own confirmation requirement governs execution
 
+### Requirement: One-shot console invocations await the agent's bounded dial
+The runtime shape is one invocation = one verb with its own transient listener, while agents dial out forever on a bounded backoff; a console invocation SHALL therefore wait up to a configured budget (`agent_dial_wait_ms`, defaulting to cover one full agent backoff cycle) for the targeted agent — or any agent, for the listing verb — to dial in and register, driving its own accept/handshake pump during the wait. Wait expiry SHALL produce the same unknown-agent refusal as an unknown name: structured error on stderr, distinguishable exit code, and no message dispatched.
+
+#### Scenario: A verb serves an agent that dials during the wait
+- **WHEN** the operator issues a verb while the registry is empty but the agent's dial-out loop is running
+- **THEN** the invocation waits for the agent's next dial, and that agent is registered and served within the same invocation
+
+#### Scenario: The budget expires without a dial
+- **WHEN** no agent dials within the configured budget
+- **THEN** the invocation reports the structured unknown-agent refusal with no message sent
+
 ### Requirement: Scriptable exit codes and output form
 Console invocations SHALL exit with success code on success and a distinguishable non-success code on failure, refusal, unsupported outcome, or transport error, so shell scripts can react to outcomes. Result text SHALL remain stable enough that automation parses it without interactive formatting.
 

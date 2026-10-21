@@ -153,6 +153,16 @@ ConsoleConfig load_console_config(const std::string& path) {
         }
         config.audit_path = audit->get<std::string>();
     }
+    // Additive (task 7.5 demo verification): the one-shot invocation's
+    // dial-in wait for the agent's bounded dial-out loop. Absent or explicit
+    // null keeps the default (one full agent backoff cycle); a present value
+    // must be a non-negative integer (0 = exact-match only, no wait).
+    if (const auto wait = doc.find("agent_dial_wait_ms"); wait != doc.end() && !wait->is_null()) {
+        if (!wait->is_number_integer() || wait->get<int>() < 0) {
+            throw ConfigError(path + ": field 'agent_dial_wait_ms' must be a non-negative integer");
+        }
+        config.agent_dial_wait_ms = wait->get<int>();
+    }
     return config;
 }
 

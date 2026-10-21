@@ -215,3 +215,90 @@ TEST_CASE("CLI verbs drive the real session stack end-to-end") {
 
     pump_both_until(console, agent, 40); // one quiet keepalive beat before teardown
 }
+
+TEST_CASE("a one-shot verb waits for the agent's dial-in within the dial budget") {
+    tether::common::Logger::instance().set_sink(std::make_unique<NullLogSink>());
+    tether::common::Logger::instance().set_min_level(tether::common::LogLevel::Error);
+
+    tt::ConsoleTransportOptions options;
+    options.listen_address = "127.0.0.1";
+    options.port = 0;
+    options.session = loopback_config();
+    options.resolve_token = [](const std::string& identity) {
+        return identity == "agent-1" ? std::string{"tok-1"} : std::string{};
+    };
+
+    tt::TcpConsoleTransport console{options};
+    console.start();
+    REQUIRE(console.listening_port() != 0);
+
+    // Production coupling: the agent's dial-out loop started AGES ago (its
+    // backoff cadence always runs) and no console side existed yet; the verb
+    // invocation's bounded dial-in wait is what closes the gap. The agent
+    // link dials here before the verb so the wait, not operator luck, does
+    // the joining: the console accepts + handshakes + registers inside its
+    // own pump loop driven by the budget.
+    std::unique_ptr<tt::TcpAgentLink> agent = tt::TcpAgentLink::connect(
+        {"127.0.0.1", console.listening_port()}, {"agent-1", "host-1"}, "tok-1",
+        loopback_config());
+    agent->begin_handshake(now_ms());
+
+    tc::TcpOperConsole cli_console{
+        console, tt::monotonic_now_ms,
+        [&agent] { agent->pump(tt::monotonic_now_ms()); } /* side pump: the fake agent */};
+    cli_console.set_agent_dial_budget_ms(5000);
+
+    // The listing verb: registry EMPTY before the wait (nothing registered
+    // until the handshake completes during the wait's pumps).
+    REQUIRE_FALSE(console.has_agent("agent-1"));
+    RunResult listing = run_verb(cli_console, {"tether-console", "agents"});
+    CHECK(listing.exit_code == tc::kExitOk);
+    CHECK(listing.out == "agent-1 live\n");
+    CHECK(listing.err.empty());
+    CHECK(console.has_agent("agent-1")); // registered inside the invocation
+
+    // exec rides the SAME wait semantics for its named-agent eligibility.
+    std::atomic<int> commands_seen{0};
+    agent->set_command_handler(
+        [&](std::uint32_t seq, const tp::Cmd& command, const std::function<bool()>&) {
+            commands_seen.fetch_add(1);
+            agent->send_result(seq, tp::ResultText{"stub-responder:" + command.command});
+        });
+    RunResult exec = run_verb(cli_console, {"tether-console", "exec", "agent-1", "ls"});
+    CHECK(exec.exit_code == tc::kExitOk);
+    CHECK(exec.out == "stub-responder:ls");
+    CHECK(commands_seen.load() == 1);
+    CHECK(exec.err.empty());
+
+    pump_both_until(console, agent, 40); // one quiet keepalive beat before teardown
+}
+
+TEST_CASE("an expired dial budget expires into the unknown-agent refusal") {
+    tether::common::Logger::instance().set_sink(std::make_unique<NullLogSink>());
+    tether::common::Logger::instance().set_min_level(tether::common::LogLevel::Error);
+
+    tt::ConsoleTransportOptions options;
+    options.listen_address = "127.0.0.1";
+    options.port = 0;
+    options.session = loopback_config();
+    options.resolve_token = [](const std::string&) { return std::string{}; };
+    tt::TcpConsoleTransport console{options};
+    console.start();
+    REQUIRE(console.listening_port() != 0);
+
+    tc::TcpOperConsole cli_console{console, tt::monotonic_now_ms};
+    cli_console.set_agent_dial_budget_ms(120); // real wall clock, bounded
+
+    // Nothing ever dials: the budget expires and the refusal is EXACTLY the
+    // pre-wait contract (structured stderr, exit 3, nothing dispatched).
+    RunResult refused = run_verb(cli_console, {"tether-console", "exec", "ghost", "ls"});
+    CHECK(refused.exit_code == tc::kExitUnknownAgent);
+    CHECK(refused.out.empty());
+    CHECK(refused.err.find("error: unknown agent 'ghost'") != std::string::npos);
+
+    // The listing verb waits the same way, then prints an empty registry.
+    RunResult listing = run_verb(cli_console, {"tether-console", "agents"});
+    CHECK(listing.exit_code == tc::kExitOk);
+    CHECK(listing.out.empty());
+    CHECK(listing.err.empty());
+}

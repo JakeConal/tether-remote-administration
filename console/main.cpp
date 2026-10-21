@@ -8,7 +8,11 @@
 // Runtime shape (documented): one invocation = one verb. `tether-console
 // exec a-1 ls > plan.txt` streams command results byte-exactly through the
 // shell redirect; the session registry any invocation sees is the registry of
-// the transport stack it starts for that invocation.
+// the transport stack it starts for that invocation. The agent side is an
+// always-running dial-out loop (bounded backoff), so each invocation pumps a
+// bounded dial-in wait (`agent_dial_wait_ms` config field, TcpOperConsole
+// setter) for the agent's next dial to land: that is what makes dial-out and
+// one-shot verbs meet without a long-lived console daemon.
 #include "audit.hpp"
 #include "cli.hpp"
 #include "config.hpp"
@@ -75,11 +79,17 @@ std::map<std::string, std::string> load_token_store(const std::string& path) {
     return tokens;
 }
 
-tether::transport::ConsoleTransportOptions console_options(const std::string& config_path) {
-    tether::common::ConsoleConfig config;
-    if (std::filesystem::exists(config_path)) {
-        config = tether::common::load_console_config(config_path);
+// Console config with the no-file fallback: a missing file behaves as the
+// default-constructed config (ephemeral port, documented loader defaults).
+tether::common::ConsoleConfig loaded_console_config(const std::string& config_path) {
+    if (!std::filesystem::exists(config_path)) {
+        return tether::common::ConsoleConfig{};
     }
+    return tether::common::load_console_config(config_path);
+}
+
+tether::transport::ConsoleTransportOptions console_options(
+    const tether::common::ConsoleConfig& config) {
     tether::transport::ConsoleTransportOptions options;
     options.listen_address = config.listen_address.empty() ? std::string("127.0.0.1")
                                                            : config.listen_address;
@@ -119,10 +129,16 @@ int main(int argc, char* argv[]) {
 
     const cli::ConsoleFactory make_console = [&log](const std::string& config_path)
         -> std::unique_ptr<cli::IOperConsole> {
-        transport::ConsoleTransportOptions options = console_options(config_path);
+        const tether::common::ConsoleConfig config = loaded_console_config(config_path);
+        transport::ConsoleTransportOptions options = console_options(config);
         auto owned = std::make_unique<transport::TcpConsoleTransport>(options);
         owned->start(); // bind + listen + begin accepting (design D1: agents dial in)
-        return std::make_unique<cli::TcpOperConsole>(std::move(owned));
+        auto console = std::make_unique<cli::TcpOperConsole>(std::move(owned));
+        // Bounded dial-in wait (see the runtime-shape note at the top): the
+        // agent's bounded dial-out loop must be able to land inside this
+        // invocation. The config field `agent_dial_wait_ms` tunes it.
+        console->set_agent_dial_budget_ms(config.agent_dial_wait_ms);
+        return console;
     };
 
     // Task 6.9 (additive console config `audit_path`): the operator turns the
