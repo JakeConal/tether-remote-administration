@@ -170,3 +170,19 @@ target_link_libraries(tether-families-e2e-tests PRIVATE
     tether-protocol tether-transport tether-common)
 add_dependencies(tether-families-e2e-tests tether-argv-probe)
 add_test(NAME families-e2e-test COMMAND tether-families-e2e-tests)
+
+# Wall-clock guard: a wedged suite (e.g. on a CI runner whose environment
+# silently broke) must fail loudly at the timeout with its ctest start
+# marker, naming where the leg stopped, instead of parking the runner for
+# hours (which hung one leg for ~1 h while every death was unobservable).
+# Nothing in this repo runs anywhere near minutes: the budgets inside the
+# suites stay in the 1-15 s band and whole ctest runs finish inside 2 min.
+set_tests_properties(
+    smoke config-test logging-test envelope-test payloads-test
+    handshake-test session-test base64-test tcp-loopback-test gmail-test
+    transport-equiv-test registry-test cli-verb-test cli-stream-test
+    cli-confirm-test cli-integration-test matrix-test process-family-test
+    file-family-test power-family-test capture-family-test camera-family-test
+    command-session-test input-family-test app-family-test audit-test
+    families-e2e-test
+    PROPERTIES TIMEOUT 600)
