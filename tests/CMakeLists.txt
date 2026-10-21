@@ -132,3 +132,27 @@ add_executable(tether-command-session-tests command_session_test.cpp)
 target_link_libraries(tether-command-session-tests
     PRIVATE doctest::doctest tether-command-handler tether-syscalls tether-common)
 add_test(NAME command-session-test COMMAND tether-command-session-tests)
+
+# Task 6.7: the input family - keylogger job lifecycle on the shared registry,
+# configurable capture storage, keyboard-lock state, and the structured
+# Wayland/unsupported resolution that never wedges the session. All platform
+# reality rides injected fakes: no test installs a real hook or locks a real
+# desktop.
+add_executable(tether-input-tests input_family_test.cpp)
+target_link_libraries(tether-input-tests PRIVATE doctest::doctest tether-syscalls)
+add_test(NAME input-family-test COMMAND tether-input-tests)
+
+# Task 6.8: the app family - .lnk/.desktop listing, argv-resolved launches
+# over the injected process control, and stop reuse. The launch assertions
+# ride the argv probe child; listing roots are injected fixture directories.
+add_executable(tether-app-tests app_family_test.cpp)
+target_link_libraries(tether-app-tests PRIVATE doctest::doctest tether-syscalls)
+add_dependencies(tether-app-tests tether-argv-probe)
+add_test(NAME app-family-test COMMAND tether-app-tests)
+
+# Task 6.9: console-side audit records - the JSONL store, query API, the
+# CLI hooks' executed/refused/failed command records and job_event records
+# (fake console, no sockets), persistence + strict re-open.
+add_executable(tether-audit-tests audit_test.cpp)
+target_link_libraries(tether-audit-tests PRIVATE doctest::doctest tether-cli tether-common)
+add_test(NAME audit-test COMMAND tether-audit-tests)

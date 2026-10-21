@@ -9,6 +9,7 @@
 // exec a-1 ls > plan.txt` streams command results byte-exactly through the
 // shell redirect; the session registry any invocation sees is the registry of
 // the transport stack it starts for that invocation.
+#include "audit.hpp"
 #include "cli.hpp"
 #include "config.hpp"
 #include "logging.hpp"
@@ -124,5 +125,22 @@ int main(int argc, char* argv[]) {
         return std::make_unique<cli::TcpOperConsole>(std::move(owned));
     };
 
-    return cli::run_cli(argc, argv, streams, make_console);
+    // Task 6.9 (additive console config `audit_path`): the operator turns the
+    // audit trail on with a storage path; without one auditing stays off
+    // (a null store is the CLI's disabled mode). The store re-opens existing
+    // history itself, so accumulated records stay queryable per invocation.
+    const cli::AuditStoreFactory make_audit = [&log](const std::string& config_path)
+        -> std::shared_ptr<cli::AuditStore> {
+        if (!std::filesystem::exists(config_path)) {
+            return nullptr; // no config file: the disabled default
+        }
+        const auto config = tether::common::load_console_config(config_path);
+        if (!config.audit_path.has_value() || config.audit_path->empty()) {
+            return nullptr; // absent/empty audit_path is the off switch
+        }
+        log.info("audit trail enabled", {{"path", *config.audit_path}});
+        return std::make_shared<cli::AuditStore>(*config.audit_path);
+    };
+
+    return cli::run_cli(argc, argv, streams, make_console, make_audit);
 }

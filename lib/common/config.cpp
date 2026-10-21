@@ -145,6 +145,14 @@ ConsoleConfig load_console_config(const std::string& path) {
     if (doc.find("gmail") != doc.end()) {
         config.gmail = parse_gmail_section(doc, path);
     }
+    // Additive (task 6.9): the optional console audit trail path. Absent or
+    // explicit null keeps auditing off; a non-string is a config error.
+    if (const auto audit = doc.find("audit_path"); audit != doc.end() && !audit->is_null()) {
+        if (!audit->is_string()) {
+            throw ConfigError(path + ": field 'audit_path' must be a string");
+        }
+        config.audit_path = audit->get<std::string>();
+    }
     return config;
 }
 

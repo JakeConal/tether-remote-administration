@@ -21,13 +21,12 @@
 // Parameters never become shell text: dispatch hands every argument to the
 // family interface as data (see process.hpp / file.hpp).
 //
-// The dispatcher is also the extension point for the remaining families:
-// power / capture / camera landed (6.4-6.6, real interfaces in power.hpp /
-// capture.hpp / camera.hpp - wired through `set_power_control` /
-// `set_screen_capture` / `set_camera_capture`); input / app slots land with
-// their owning tasks (6.7-6.8). Until then those verbs dispatch to the
-// structured unsupported result below - the definitive, non-wedging
-// resolution.
+// The dispatcher is the wiring point for every family: power / capture /
+// camera (6.4-6.6), input (6.7) and app (6.8) land behind
+// `set_power_control` / `set_screen_capture` / `set_camera_capture` /
+// `set_input_control` / `set_app_launcher`. A family slot left null keeps
+// its verbs dispatching to the structured unsupported result below - the
+// definitive, non-wedging resolution.
 #pragma once
 
 #include "errors.hpp"
@@ -111,23 +110,14 @@ bool supported_on(const CommandSpec& spec, Platform platform);
 
 // Family interfaces for the families implemented in this build. The file
 // and process families are defined in their own headers (included above);
-// power (power.hpp), capture (capture.hpp) and camera (camera.hpp) are
-// declared here, defined there, and wired through the setters on
-// CommandDispatcher below. Input (6.7) / app (6.8) remain the
-// task-6.1 stubs until their owning tasks grow them.
+// power (power.hpp), capture (capture.hpp), camera (camera.hpp), input
+// (input.hpp) and app (app.hpp) are declared here, defined in their own
+// headers, and wired through the setters on CommandDispatcher below.
 class IPowerControl;
 class IScreenCapture;
 class ICameraCapture;
-
-class IInputControl {  // keylogger / keyboard lock land with task 6.7
-public:
-    virtual ~IInputControl() = default;
-};
-
-class IAppLauncher {   // app list/start/stop land with task 6.8
-public:
-    virtual ~IAppLauncher() = default;
-};
+class IInputControl;  // input.hpp (task 6.7): keylogger jobs + keyboard lock
+class IAppLauncher;   // app.hpp (task 6.8): app list / start / stop
 
 class CommandDispatcher {
 public:
@@ -148,6 +138,9 @@ public:
     void set_power_control(std::shared_ptr<IPowerControl> impl);
     void set_screen_capture(std::shared_ptr<IScreenCapture> impl);
     void set_camera_capture(std::shared_ptr<ICameraCapture> impl);
+    // 6.7 input, 6.8 app.
+    void set_input_control(std::shared_ptr<IInputControl> impl);
+    void set_app_launcher(std::shared_ptr<IAppLauncher> impl);
 
     // THE dispatch entry: one definitive Outcome for ANY (verb, args), in
     // this order of checks, each refusing without touching any capability:
@@ -175,6 +168,8 @@ private:
     std::shared_ptr<IPowerControl> power_;
     std::shared_ptr<IScreenCapture> capture_;
     std::shared_ptr<ICameraCapture> camera_;
+    std::shared_ptr<IInputControl> input_;
+    std::shared_ptr<IAppLauncher> app_;
 };
 
 } // namespace tether::syscalls

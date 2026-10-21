@@ -1,13 +1,16 @@
 // lib/syscalls/matrix.cpp - the matrix data and the dispatch layer's
 // implementation (task 6.1), plus the family glue for the families
 // implemented in this build: process (task 6.2), file (task 6.3), power
-// (task 6.4), capture (task 6.5) and camera (task 6.6). The glue owns only
-// argument-shape validation and result formatting; every system effect goes
-// through the family interface as typed data.
+// (task 6.4), capture (task 6.5), camera (task 6.6), input (task 6.7) and
+// app (task 6.8). The glue owns only argument-shape validation and result
+// formatting; every system effect goes through the family interface as
+// typed data.
 #include "matrix.hpp"
 
+#include "app.hpp"
 #include "camera.hpp"
 #include "capture.hpp"
+#include "input.hpp"
 #include "power.hpp"
 
 #include <algorithm>
@@ -330,6 +333,128 @@ Outcome camera_stop(ICameraCapture& control, const std::vector<std::string>& arg
     return outcome;
 }
 
+// ---- family glue: input (task 6.7) -------------------------------------------
+//
+// Authorized-use framing, operator-facing: all four verbs are explicit
+// console commands that the console-side audit trail records (task 6.9);
+// nothing in this family starts on its own, and the lock is a reversible
+// engage/release pair the operator drives. A started keylogger announces a
+// machine-readable job event (the established convention: job events ride
+// JSON in RESULT payloads) so the console audit records the job lifecycle
+// without any new wire type.
+
+Outcome input_start_keylogger(IInputControl& control, const std::vector<std::string>& argv) {
+    if (argv.size() > 1) {
+        throw SyscallError(
+            "invalid_args",
+            "start_keylogger takes at most one argument (the capture storage path), got " +
+                std::to_string(argv.size()));
+    }
+    // The storage path is the start command's one configurable parameter
+    // (the family's start refuses an unopenable path before seating the
+    // job - the refusal surfaces from the call as a classified SyscallError).
+    const std::string storage = argv.empty() ? std::string(kDefaultCaptureStorage) : argv.front();
+    control.start_keylogger(storage);
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("keylogger job started");
+    outcome.lines.push_back("the capture accumulates to " + storage +
+                            "; stop_keylogger stops it and delivers the file");
+    outcome.lines.push_back("{\"tether_job_event\":{\"job\":\"input\",\"event\":\"started\"}}");
+    return outcome;
+}
+
+// The accumulated capture rides outcome.file (byte-complete + named; an
+// empty capture is an honest zero-byte file). The console's stopped job
+// event derives from the verb + the delivered FILE_META name: the agent
+// wire carries the file-only stream for deliverable results (the same
+// shape stop_webcam already produces).
+Outcome input_stop_keylogger(IInputControl& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "stop_keylogger takes no arguments, got " + std::to_string(argv.size()));
+    }
+    const Outcome::Deliverable deliverable = control.stop_keylogger();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("keylogger job stopped; delivered " + deliverable.name);
+    outcome.file = deliverable;
+    return outcome;
+}
+
+Outcome input_lock(IInputControl& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "lock_keyboard takes no arguments, got " + std::to_string(argv.size()));
+    }
+    control.lock_keyboard();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("keyboard locked");
+    outcome.lines.push_back("unlock_keyboard releases the lock");
+    return outcome;
+}
+
+Outcome input_unlock(IInputControl& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "unlock_keyboard takes no arguments, got " + std::to_string(argv.size()));
+    }
+    control.unlock_keyboard();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("keyboard unlocked");
+    return outcome;
+}
+
+// ---- family glue: app (task 6.8) ----------------------------------------------
+
+Outcome app_list(IAppLauncher& launcher, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "list_app takes no arguments, got " + std::to_string(argv.size()));
+    }
+    const std::vector<AppEntry> entries = launcher.list();
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.message = "listed " + std::to_string(entries.size()) + " applications";
+    for (const AppEntry& entry : entries) {
+        outcome.lines.push_back(entry.name + " " + entry.path);
+    }
+    return outcome;
+}
+
+Outcome app_start(IAppLauncher& launcher, const std::vector<std::string>& argv) {
+    if (argv.size() != 1) {
+        throw SyscallError("invalid_args",
+                           "start_app needs exactly one argument: the application name from list_app");
+    }
+    const std::uint32_t pid = launcher.start(argv[0]);
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back("started pid " + std::to_string(pid));
+    return outcome;
+}
+
+// stop_app addresses a child BY pid or by process image name - the exact
+// resolution the process family's stop serves, shared because the agent
+// wires ONE process control across both families (see app.hpp). A launch
+// name and its backing image name can differ; the pid form from start_app
+// always works.
+Outcome app_stop(IProcessControl& processes, const std::vector<std::string>& argv) {
+    if (argv.size() != 1) {
+        throw SyscallError("invalid_args",
+                           "stop_app needs exactly one argument: a pid or a process name");
+    }
+    return process_stop(processes, argv);
+}
+
 } // namespace
 
 // ---- matrix accessors ---------------------------------------------------------
@@ -408,6 +533,14 @@ void CommandDispatcher::set_camera_capture(std::shared_ptr<ICameraCapture> impl)
     camera_ = std::move(impl);
 }
 
+void CommandDispatcher::set_input_control(std::shared_ptr<IInputControl> impl) {
+    input_ = std::move(impl);
+}
+
+void CommandDispatcher::set_app_launcher(std::shared_ptr<IAppLauncher> impl) {
+    app_ = std::move(impl);
+}
+
 bool CommandDispatcher::family_available(Family family) const {
     switch (family) {
         case Family::Process: return process_ != nullptr;
@@ -415,10 +548,9 @@ bool CommandDispatcher::family_available(Family family) const {
         case Family::Power: return power_ != nullptr;
         case Family::Capture: return capture_ != nullptr;
         case Family::Camera: return camera_ != nullptr;
-        // Input and app are wired by their OWNING tasks (6.7-6.8); until
-        // then their verbs resolve to the structured unsupported result at
-        // step 3 of dispatch().
-        default: return false;
+        case Family::Input: return input_ != nullptr;
+        case Family::App: return app_ != nullptr;
+        default: return false; // never reached with all seven enumerated
     }
 }
 
@@ -504,8 +636,34 @@ Outcome CommandDispatcher::dispatch(const std::string& verb,
                 return camera_start(*camera_, argv);
             }
             return camera_stop(*camera_, argv);
-        // Input/app families resolve earlier (step 3) while their tasks are
-        // pending; the catch-all below still guarantees classification.
+        case Family::Input:
+            if (verb == "start_keylogger") {
+                return input_start_keylogger(*input_, argv);
+            }
+            if (verb == "stop_keylogger") {
+                return input_stop_keylogger(*input_, argv);
+            }
+            if (verb == "lock_keyboard") {
+                return input_lock(*input_, argv);
+            }
+            return input_unlock(*input_, argv);
+        case Family::App:
+            if (verb == "list_app") {
+                return app_list(*app_, argv);
+            }
+            if (verb == "start_app") {
+                return app_start(*app_, argv);
+            }
+            // stop_app reuses the process family's shared stop (same
+            // IProcessControl the agent wires across both families). The
+            // app family itself is a non-null slot here (step 3 refused
+            // that); the process-null guard covers an app-launcher-only
+            // wiring with a classified failure instead of dereferencing.
+            if (process_ == nullptr) {
+                return refuse("execute_failed",
+                              "'stop_app' needs the shared process control, which is not wired");
+            }
+            return app_stop(*process_, argv);
         default:
             break;
     }

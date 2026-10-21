@@ -6,7 +6,10 @@
 // the verb against an IOperConsole supplied by the caller, and streams every
 // result piece to the injected streams as it arrives. Tests drive it fully
 // in-process with string streams and a fake console; the service main wires it
-// to the real TCP transport stack.
+// to the real TCP transport stack. Task 6.9 adds the optional audit hooks:
+// with an AuditStoreFactory, every dispatched attempt (executed / refused /
+// failed) and every background-job lifecycle event lands a console-side
+// audit record.
 //
 // Stream rules (operator-console delta): result text and file bytes go to
 // `streams.out` byte-exactly, progress/status/reporting goes to `streams.err`,
@@ -24,6 +27,7 @@
 //   4 unconfirmed destructive command refused before dispatch
 #pragma once
 
+#include "audit.hpp"
 #include "session.hpp"
 
 #include <functional>
@@ -98,16 +102,27 @@ using ConsoleFactory =
 // if a Phase 6 command rename shifts them, this set is what moves.
 bool is_destructive_command(const std::string& command);
 
+// The audit-trail factory (task 6.9): called ONCE per invocation after the
+// --config path is resolved; the returned store (a null return = audit
+// disabled) receives every command record and background-job event record
+// the invocation produces. Absent by default so existing call sites
+// (tests, phase-5 integrations) keep compiling unchanged - their behavior
+// is identical to a store-less run.
+using AuditStoreFactory =
+    std::function<std::shared_ptr<AuditStore>(const std::string& config_path)>;
+
 // The verb dispatch entrypoint. `arguments` is the argv-style token list
 // INCLUDING the program name (arguments[0] is skipped); the verb surface is:
 //   agents
 //   exec <agent> <command> [args...] [--yes]
 //   cancel <agent> <seq>
 int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
-            const ConsoleFactory& make_console);
+            const ConsoleFactory& make_console,
+            const AuditStoreFactory& make_audit = nullptr);
 
 // argc/argv convenience wrapper.
 int run_cli(int argc, const char* const argv[], CliStreams streams,
-            const ConsoleFactory& make_console);
+            const ConsoleFactory& make_console,
+            const AuditStoreFactory& make_audit = nullptr);
 
 } // namespace tether::cli

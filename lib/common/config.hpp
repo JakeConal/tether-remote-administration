@@ -40,11 +40,17 @@ struct GmailSectionConfig {
 // - port:             port the console listens on (1..65535)
 // - token_store_path: where the console reads its provisioned agent tokens
 // - gmail:            optional Gmail adapter section (absent/null = disabled)
+// - audit_path:       optional task-6.9 audit trail file (JSONL). Absent,
+//                     null, or an empty string disables the audit trail;
+//                     a set path turns on console-side audit records
+//                     (executed/refused/failed commands and background-job
+//                     lifecycle events persist there and re-load on open).
 struct ConsoleConfig {
     std::string listen_address;
     int port = 0;
     std::string token_store_path;
     std::optional<GmailSectionConfig> gmail;
+    std::optional<std::string> audit_path;
 };
 
 // Fields for the agent (target side), see docs: agent.example.json.

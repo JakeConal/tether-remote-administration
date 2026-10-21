@@ -15,7 +15,9 @@
 #include <CLI/CLI.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
 #include <sstream>
 #include <utility>
 
@@ -28,6 +30,102 @@ namespace {
 // names the families shutdown/restart and the file family list/delete/move/
 // copy, whence `delete` as the deletion command word).
 constexpr const char* kDestructiveCommands[] = {"shutdown", "restart", "delete"};
+
+// ---- audit helpers (task 6.9) -------------------------------------------------
+
+// Wall-clock stamp for audit records (audit time fields are wall time; the
+// session/transport clocks inside a run stay monotonic).
+std::int64_t wall_now_ms() {
+    return std::int64_t{std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count()};
+}
+
+// Every audit write funnels through here: append failures fail the invocation
+// loudly via CliSetupError (structured `error: ...` output, exit code 1) -
+// never a silently skipped record.
+void audit_append(AuditStore& store, const AuditRecord& record) {
+    try {
+        store.append(record);
+    } catch (const AuditStoreError& error) {
+        throw CliSetupError(std::string("audit write failed: ") + error.what());
+    }
+}
+
+// One command record (record_type "command") with the invocation's wall time.
+void record_command_attempt(const std::shared_ptr<AuditStore>& audit, const std::string& agent,
+                            const std::string& command,
+                            const std::vector<std::string>& parameters, std::uint32_t seq,
+                            const std::string& outcome, const std::string& detail) {
+    if (!audit) {
+        return; // audit disabled (no configured storage): nothing to write
+    }
+    const std::int64_t now = wall_now_ms();
+    AuditRecord record;
+    record.time = format_audit_time_iso8601(now);
+    record.time_epoch_ms = now;
+    record.agent = agent;
+    record.command = command;
+    record.parameters = parameters;
+    record.seq = seq;
+    record.outcome = outcome;
+    record.record_type = "command";
+    record.detail = detail;
+    audit_append(*audit, record);
+}
+
+// One background-job lifecycle record (record_type "job_event") referencing
+// the initiating / finalizing command through its agent/command/parameters/
+// seq identity fields.
+void record_job_event(const std::shared_ptr<AuditStore>& audit, const std::string& agent,
+                      const std::string& command, const std::vector<std::string>& parameters,
+                      std::uint32_t seq, const std::string& event, const std::string& job,
+                      const std::string& delivered) {
+    if (!audit) {
+        return;
+    }
+    const std::int64_t now = wall_now_ms();
+    AuditRecord record;
+    record.time = format_audit_time_iso8601(now);
+    record.time_epoch_ms = now;
+    record.agent = agent;
+    record.command = command;
+    record.parameters = parameters;
+    record.seq = seq;
+    record.outcome = "executed"; // the lifecycle event itself completed
+    record.record_type = "job_event";
+    record.event = event;
+    record.job = job;
+    record.delivered = delivered;
+    audit_append(*audit, record);
+}
+
+// The four background-job lifecycle verbs (camera family + input family) map
+// to their registry slot and the event whose evidence arrives on the result
+// channel. Start events ride the RESULT-JSON convention the input family
+// embeds (see parse_job_event_line); stop events travel as file-only streams
+// (a delivered capture has no terminal RESULT text), so the verb + the
+// FILE_META name is the fallback evidence the audit records.
+struct VerbJobEvent {
+    const char* verb;
+    const char* job;
+    const char* event;
+};
+constexpr std::array<VerbJobEvent, 4> kJobVerbEvents{{
+    {"start_webcam", "camera", "started"},
+    {"stop_webcam", "camera", "stopped"},
+    {"start_keylogger", "input", "started"},
+    {"stop_keylogger", "input", "stopped"},
+}};
+
+const VerbJobEvent* find_verb_job_event(const std::string& verb) {
+    for (const VerbJobEvent& entry : kJobVerbEvents) {
+        if (verb == entry.verb) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
 
 bool is_yes_answer(const std::string& line) {
     std::string trimmed;
@@ -163,7 +261,7 @@ int run_agents(const std::vector<std::string>& tail, CliStreams streams,
 
 int run_exec(const std::vector<std::string>& tail, CliStreams streams,
              std::unique_ptr<IOperConsole>& console, const ConsoleFactory& make_console,
-             const std::string& config_path) {
+             const std::string& config_path, const std::shared_ptr<AuditStore>& audit) {
     std::string agent;
     std::string command;
     bool confirmed = false;
@@ -186,14 +284,19 @@ int run_exec(const std::vector<std::string>& tail, CliStreams streams,
 
     // Distinguishable from usage errors and unknown verbs, and pre-dispatch.
     if (!console_ref.has_agent(agent)) {
+        record_command_attempt(audit, agent, command, args, 0, "refused",
+                               "unknown agent '" + agent + "'");
         emit_unknown_agent(streams.err, agent);
         return kExitUnknownAgent;
     }
 
     // 5.4: the confirmation gate runs BEFORE dispatch; nothing reaches the
-    // agent unless the operator confirmed.
+    // agent unless the operator confirmed. The refusal is one of the
+    // audit-trail's explicit outcomes (nothing was dispatched: seq 0).
     if (is_destructive_command(command) && !confirmed) {
         if (!streams.stdin_is_tty) {
+            record_command_attempt(audit, agent, command, args, 0, "refused",
+                                   "destructive command refused: not confirmed (nothing was sent)");
             emit_refusal(streams.err, agent, command);
             return kExitRefused;
         }
@@ -201,14 +304,36 @@ int run_exec(const std::vector<std::string>& tail, CliStreams streams,
                     << "'; confirm? [y/N] " << std::flush;
         std::string answer;
         if (!std::getline(streams.in, answer) || !is_yes_answer(answer)) {
+            record_command_attempt(audit, agent, command, args, 0, "refused",
+                                   "destructive command refused: not confirmed (nothing was sent)");
             emit_refusal(streams.err, agent, command);
             return kExitRefused;
         }
     }
 
     ResultStreamer streamer{streams.out, streams.err};
-    const protocol::ResultHook hook = [&](std::uint32_t, const protocol::Message& piece, bool) {
+    // 6.9 hook-side evidence: the delivered capture's name (stop events) and
+    // the machine-readable job event the agent embedded in its RESULT text
+    // (start events; the frozen RESULT-JSON convention).
+    std::string stop_delivery_name;
+    bool job_event_recorded = false;
+    const protocol::ResultHook hook = [&](std::uint32_t seq, const protocol::Message& piece,
+                                          bool) {
         streamer.feed(piece);
+        if (!audit) {
+            return;
+        }
+        if (const auto* text = std::get_if<protocol::ResultText>(&piece)) {
+            if (const auto job_event = parse_job_event_line(text->text)) {
+                record_job_event(audit, agent, command, args, seq, job_event->event,
+                                 job_event->job, "");
+                job_event_recorded = true;
+                return;
+            }
+        }
+        if (const auto* meta = std::get_if<protocol::FileMeta>(&piece)) {
+            stop_delivery_name = meta->name;
+        }
     };
 
     std::optional<protocol::CommandView> view;
@@ -216,25 +341,46 @@ int run_exec(const std::vector<std::string>& tail, CliStreams streams,
         view = console_ref.dispatch(agent, protocol::Cmd{command, args}, hook);
     } catch (const std::exception& error) {
         streams.out.flush();
+        record_command_attempt(audit, agent, command, args, 0, "failed",
+                               std::string("dispatch failed: ") + error.what());
         streams.err << "error: dispatch failed: " << error.what() << "\n";
         return kExitFailure;
     }
     streams.out.flush();
 
     if (!view.has_value()) {
+        record_command_attempt(audit, agent, command, args, 0, "failed", "agent session lost");
         streams.err << "error: command outcome unavailable (agent session lost)\n";
         return kExitFailure;
     }
     switch (view->status) {
         case protocol::CommandStatus::Completed:
             if (streamer.delivery_broken) {
+                record_command_attempt(audit, agent, command, args, view->seq, "failed",
+                                       "file delivery incomplete");
                 streams.err << "error: file delivery incomplete\n";
                 return kExitFailure;
             }
+            // 6.9: the verb-table fallback for job lifecycle events the
+            // RESULT text did not already record (start results without the
+            // JSON event; stop results that travel as file-only streams).
+            if (const VerbJobEvent* mapped = find_verb_job_event(command)) {
+                const bool started_by_table =
+                    std::string(mapped->event) == "started" && !job_event_recorded;
+                const bool stopped_by_table =
+                    std::string(mapped->event) == "stopped" && !stop_delivery_name.empty();
+                if (started_by_table || stopped_by_table) {
+                    record_job_event(audit, agent, command, args, view->seq, mapped->event,
+                                     mapped->job,
+                                     stopped_by_table ? stop_delivery_name : std::string{});
+                }
+            }
+            record_command_attempt(audit, agent, command, args, view->seq, "executed", "");
             return kExitOk; // stdout already carries the result bytes only
         case protocol::CommandStatus::Failed: {
             // Failure details never flood the result channel: the error line
-            // rides stderr, stdout stays empty or result-only.
+            // rides stderr, stdout stays empty or result-only. The audit
+            // outcome classifies the agent's coded refusal vs failure (6.9).
             std::string detail;
             for (auto piece = view->pieces.rbegin(); piece != view->pieces.rend(); ++piece) {
                 if (const auto* err = std::get_if<protocol::Err>(&*piece)) {
@@ -242,6 +388,10 @@ int run_exec(const std::vector<std::string>& tail, CliStreams streams,
                     break;
                 }
             }
+            record_command_attempt(audit, agent, command, args, view->seq,
+                                   classify_command_outcome(view->error_code),
+                                   detail.empty() ? view->error_code
+                                                  : view->error_code + ": " + detail);
             streams.err << "error: command failed: " << view->error_code;
             if (!detail.empty()) {
                 streams.err << ": " << detail;
@@ -250,12 +400,18 @@ int run_exec(const std::vector<std::string>& tail, CliStreams streams,
             return kExitFailure;
         }
         case protocol::CommandStatus::Cancelled:
+            record_command_attempt(audit, agent, command, args, view->seq, "failed",
+                                   "command cancelled");
             streams.err << "error: command cancelled (seq " << view->seq << ")\n";
             return kExitFailure;
         case protocol::CommandStatus::Pending:
+            record_command_attempt(audit, agent, command, args, view->seq, "failed",
+                                   "command never reached a terminal outcome");
             streams.err << "error: command never reached a terminal outcome\n";
             return kExitFailure;
     }
+    record_command_attempt(audit, agent, command, args, view->seq, "failed",
+                           "command ended with an unclassified outcome");
     streams.err << "error: command ended with an unclassified outcome\n";
     return kExitFailure;
 }
@@ -323,7 +479,7 @@ bool is_destructive_command(const std::string& command) {
 }
 
 int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
-            const ConsoleFactory& make_console) {
+            const ConsoleFactory& make_console, const AuditStoreFactory& make_audit) {
     // Stage 1: global options (--config). Unknown tokens pass through so the
     // verb layer fully owns everything below argv[0]; an unknown verb therefore
     // fails before any console is constructed or configured.
@@ -357,6 +513,34 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
     const std::string verb = verb_tokens.front();
     const std::vector<std::string> tail(verb_tokens.begin() + 1, verb_tokens.end());
 
+    // Unknown verbs stay side-effect-free: nothing is constructed, audited,
+    // or configured (the usage check guards the audit construction below).
+    bool known_verb = false;
+    static const char* kKnownVerbs[] = {"agents", "exec", "cancel"};
+    for (const char* known : kKnownVerbs) {
+        if (verb == known) {
+            known_verb = true;
+            break;
+        }
+    }
+    if (!known_verb) {
+        emit_unknown_verb(streams.err, verb);
+        return kExitUsage;
+    }
+
+    // 6.9: the invocation's audit trail, built once the config path is
+    // known. A null store disables auditing (absent/empty `audit_path`);
+    // factory failures fail the invocation before anything dispatches.
+    std::shared_ptr<AuditStore> audit;
+    if (make_audit) {
+        try {
+            audit = make_audit(config_path);
+        } catch (const std::exception& error) {
+            streams.err << "error: audit setup failed: " << error.what() << "\n";
+            return kExitFailure;
+        }
+    }
+
     std::unique_ptr<IOperConsole> console;
     const auto setup_guard = [&](auto&& body) {
         try {
@@ -375,7 +559,7 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
     }
     if (verb == "exec") {
         return setup_guard(
-            [&] { return run_exec(tail, streams, console, make_console, config_path); });
+            [&] { return run_exec(tail, streams, console, make_console, config_path, audit); });
     }
     if (verb == "cancel") {
         return setup_guard(
@@ -386,9 +570,9 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
 }
 
 int run_cli(int argc, const char* const argv[], CliStreams streams,
-            const ConsoleFactory& make_console) {
+            const ConsoleFactory& make_console, const AuditStoreFactory& make_audit) {
     return run_cli(std::vector<std::string>(argv, argv + argc), std::move(streams),
-                   make_console);
+                   make_console, make_audit);
 }
 
 } // namespace tether::cli
