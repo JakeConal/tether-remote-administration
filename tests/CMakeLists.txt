@@ -164,12 +164,40 @@ add_test(NAME audit-test COMMAND tether-audit-tests)
 # host device would be required (power tripwire, fake screen/camera/input
 # sources); process/file/app reality stays per-OS real. Launch assertions
 # ride the argv probe child (same dependency pattern as the 6.2/6.8 suites).
+#
+# Registration is ONE binary into ELEVEN per-case ctest tests (doctest
+# `-tc=*<unique name substring>*` filters): CI evidence says this composition
+# wedged on windows-latest with zero captured output, and a per-case
+# partition makes any future wedge NAME its exact case in the ctest log -
+# one wedged case can no longer hide behind the other ten passing cases.
+# Case names stay unique by that substring across the whole TU.
 add_executable(tether-families-e2e-tests families_e2e_test.cpp)
 target_link_libraries(tether-families-e2e-tests PRIVATE
     doctest::doctest tether-cli tether-command-handler tether-syscalls
     tether-protocol tether-transport tether-common)
 add_dependencies(tether-families-e2e-tests tether-argv-probe)
-add_test(NAME families-e2e-test COMMAND tether-families-e2e-tests)
+add_test(NAME families-e2e-process COMMAND
+    tether-families-e2e-tests -tc=*process family over the CLI*)
+add_test(NAME families-e2e-file COMMAND
+    tether-families-e2e-tests -tc=*file family over the CLI*)
+add_test(NAME families-e2e-power COMMAND
+    tether-families-e2e-tests -tc=*power family over the CLI*)
+add_test(NAME families-e2e-capture-fake COMMAND
+    tether-families-e2e-tests -tc=*fake capture delivers*)
+add_test(NAME families-e2e-capture-real COMMAND
+    tether-families-e2e-tests -tc=*platform in use: the REAL per-OS grab*)
+add_test(NAME families-e2e-camera COMMAND
+    tether-families-e2e-tests -tc=*camera family over the CLI*)
+add_test(NAME families-e2e-input-keylog COMMAND
+    tether-families-e2e-tests -tc=*keylogger job start/stop with temp storage*)
+add_test(NAME families-e2e-input-wayland COMMAND
+    tether-families-e2e-tests -tc=*a Wayland environment refuses*)
+add_test(NAME families-e2e-app COMMAND
+    tether-families-e2e-tests -tc=*app family over the CLI*)
+add_test(NAME families-e2e-audit COMMAND
+    tether-families-e2e-tests -tc=*the gauntlet leaves an audit trail*)
+add_test(NAME families-e2e-unknown COMMAND
+    tether-families-e2e-tests -tc=*unknown command over the CLI*)
 
 # Wall-clock guard: a wedged suite (e.g. on a CI runner whose environment
 # silently broke) must fail loudly at the timeout with its ctest start
@@ -184,8 +212,15 @@ set_tests_properties(
     cli-confirm-test cli-integration-test matrix-test process-family-test
     file-family-test power-family-test capture-family-test camera-family-test
     command-session-test input-family-test app-family-test audit-test
-    families-e2e-test
     PROPERTIES TIMEOUT 600)
-# The e2e suite runs in ~2 s when healthy; a tighter wall clock keeps diagnosis
-# cycles fast (the per-case stderr markers name any wedging case on timeout).
-set_tests_properties(families-e2e-test PROPERTIES TIMEOUT 150)
+# Each per-case e2e test runs in << 2 s when healthy. The TIMEOUTs here are
+# the outer backstop: the test binary's own watchdog (tests/families_e2e_test.cpp,
+# budget 90 s, _Exit(34) with full captured stderr) fires first, so a wedge
+# resolves to a normal failed test - named per case - long before the kill.
+set_tests_properties(
+    families-e2e-process families-e2e-file families-e2e-power
+    families-e2e-capture-fake families-e2e-capture-real
+    families-e2e-camera families-e2e-input-keylog
+    families-e2e-input-wayland families-e2e-app families-e2e-audit
+    families-e2e-unknown
+    PROPERTIES TIMEOUT 240)

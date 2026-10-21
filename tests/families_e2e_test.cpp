@@ -57,7 +57,6 @@
 #include "input.hpp"
 #include "jobs.hpp"
 #include "logging.hpp"
-#include "matrix.hpp"
 #include "power.hpp"
 #include "process.hpp"
 #include "session.hpp"
@@ -67,10 +66,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
-#include <cstdlib> // getenv
+#include <cstdlib> // getenv, std::_Exit
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -124,10 +124,56 @@ void e2e_trace(const std::string& message) {
     std::cerr << "[e2e] " << message << std::endl;
 }
 
+void e2e_step(const std::string& label) { e2e_trace("step: " + label); }
+
+// The case the test binary is currently inside (literals only, so the
+// watchdog below may read it from its own thread without locks).
+std::atomic<const char*> g_current_case{"<startup: no case entered yet>"};
+
+// One breadcrumb per case entry: prints entry/exit and updates the watchdog's
+// current-case pointer.
 struct CaseTrace {
-    explicit CaseTrace(const std::string& name) { e2e_trace("enter " + name); }
+    explicit CaseTrace(const char* name) {
+        g_current_case.store(name);
+        e2e_trace(std::string("enter ") + name);
+    }
     ~CaseTrace() { e2e_trace("exit"); }
 };
+
+// ---- the wedge watchdog -------------------------------------------------------
+//
+// CI evidence: this suite wedged on windows-latest for the full ctest budget
+// (600 s) with ZERO captured output - arguably the first case never even
+// entered. This watchdog is a static-initialization thread (it lives from
+// before main across every future case), prints its own unbuffered markers,
+// and at the hard budget self-terminates with _Exit(34): ctest then records a
+// normal failed test with the captured stderr up to that point - never a mute
+// kill whose partial output dies with the pipe. The per-case ctest TIMEOUT in
+// tests/CMakeLists.txt stays the outer backstop (larger than this budget).
+void e2e_watchdog_body() {
+    constexpr int kWatchdogBudgetSeconds = 90;
+    std::cerr << "[watchdog] thread up (budget " << kWatchdogBudgetSeconds
+              << " s); case '" << g_current_case.load() << "'" << std::endl;
+    for (int elapsed = 10; elapsed < kWatchdogBudgetSeconds; elapsed += 10) {
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::cerr << "[watchdog] alive " << elapsed << " s; case '"
+                  << g_current_case.load() << "'" << std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::cerr << "[watchdog] budget of " << kWatchdogBudgetSeconds
+              << " s exceeded inside case '" << g_current_case.load()
+              << "'; self-terminating so the wedge fails loud with its "
+              << "captured stderr intact" << std::endl;
+    std::_Exit(34);
+}
+
+struct E2eWatchdogLauncher {
+    E2eWatchdogLauncher() { std::thread(e2e_watchdog_body).detach(); }
+};
+
+// static-initialization anchor: starts the thread before main and before
+// any test case (the monitor always runs even for a startup-time wedge).
+const E2eWatchdogLauncher g_e2e_watchdog{};
 
 // ---- tiny guards over the logger (status noise must not leak into output) ----
 
@@ -500,6 +546,8 @@ struct Habitat {
     tsys::CommandDispatcher dispatcher;
     tt::TcpConsoleTransport console;
     std::unique_ptr<tt::TcpAgentLink> agent;
+    std::atomic<bool> agent_pump_run{false};
+    std::thread agent_pump_worker;
     tcli::TcpOperConsole cli;
     AppFixtures apps;
     const fs::path console_config_path;
@@ -516,18 +564,29 @@ struct Habitat {
           dispatcher(),
           console(console_options()),
           agent(),
-          cli(console, tt::monotonic_now_ms, [this] { agent->pump(tt::monotonic_now_ms()); }),
+        // The CLI's side pump stays a no-op: the agent half pumps itself on
+        // its own thread below (the production shape - separate processes,
+        // independent loops; required so a large agent-side send that fills
+        // the kernel socket buffer cannot starve the console's reads).
+          cli(console, tt::monotonic_now_ms, [] {}),
           apps(),
           console_config_path(scratch / "console.json"),
           audit_path(scratch / "audit.jsonl") {
         // The agent dials INTO the console (the shape agent/main.cpp runs in
         // a real deployment): bind the listener first, then connect, THEN
         // wire the dispatcher onto the live session.
+        e2e_step("habitat: console listener starting");
         console.start();
         REQUIRE(console.listening_port() != 0);
+        e2e_step("habitat: console listening (port " +
+                 std::to_string(console.listening_port()) + ")");
+        e2e_step("habitat: agent link connecting");
         agent = make_agent();
+        e2e_step("habitat: agent link connected; wiring the dispatcher");
         wire_dispatcher(wiring);
+        e2e_step("habitat: dispatcher wired; writing console config");
         write_console_config();
+        e2e_step("habitat: console config written; building app fixtures");
         build_app_fixtures(apps);
         e2e_trace("habitat up, console port " +
                   std::to_string(console.listening_port()));
@@ -641,9 +700,11 @@ bool established_handshake(Habitat& habitat, tt::TransportMillis budget_ms = 150
         const auto session = habitat.console.session_for(kAgentIdentity);
         if (habitat.agent->established() && session &&
             session->state() == tp::SessionState::Established) {
+            e2e_step("handshake established");
             return true;
         }
         if (now >= deadline) {
+            e2e_step("handshake NOT established within budget");
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -664,15 +725,18 @@ void pump_both_until(Habitat& habitat, tt::TransportMillis budget_ms) {
 // poll with the stack kept alive: long-ish waits (child start/end) sit
 // BETWEEN CLI calls, so both halves keep pumping the whole time.
 bool poll_with_pump(Habitat& habitat, const std::function<bool()>& condition, int budget_ms) {
+    e2e_step("poll begin (budget " + std::to_string(budget_ms) + " ms)");
     const tt::TransportMillis deadline = tt::monotonic_now_ms() + budget_ms;
     for (;;) {
         const tt::TransportMillis now = tt::monotonic_now_ms();
         habitat.console.pump(now);
         habitat.agent->pump(now);
         if (condition()) {
+            e2e_step("poll ok");
             return true;
         }
         if (now >= deadline) {
+            e2e_step("poll EXPIRED (condition never became true)");
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -690,6 +754,11 @@ struct RunResult {
 // the interactive confirmation gate on with scripted answers.
 RunResult run_verb(Habitat& habitat, const std::vector<std::string>& tail,
                    const char* stdin_bytes = "", bool stdin_tty = false) {
+    std::string verb_label;
+    for (const std::string& token : tail) {
+        verb_label += (verb_label.empty() ? "'" : " '") + token + "'";
+    }
+    e2e_step("verb begin " + verb_label + (stdin_tty ? " [interactive stdin]" : ""));
     std::ostringstream out;
     std::ostringstream err;
     std::istringstream in(stdin_bytes);
@@ -704,6 +773,7 @@ RunResult run_verb(Habitat& habitat, const std::vector<std::string>& tail,
         habitat.audit_factory());
     result.out = out.str();
     result.err = err.str();
+    e2e_step("verb ended " + verb_label + " (exit " + std::to_string(result.exit_code) + ")");
     return result;
 }
 
