@@ -62,7 +62,7 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 - [x] 7.3 Decide and record the public-repo readiness items left open in the design: final license choice, README tone, and whether `report/` stays linked or private; record the decision in `docs/readiness-decisions.md` with the owner's sign-off
 - [x] 7.4 Record the allowed-use policy results: confirm no credentials or admin email lists appear anywhere in source, `admin.txt`-style files live only in operator config paths outside the repo; verify by searching the tree for the retired hardcoded addresses and addresses from v1
 - [x] 7.5 Add the demo script (`scripts/demo.md` or shell script): a narrated run showing agent connect, registry listing, process listing, screenshot streaming to a file, background camera job lifecycle, and a confirmation refusal; verify the demo script was executed end-to-end once and produced the expected outputs
-- [ ] 7.6 Final integration check: full CI matrix green on the completed implementation (Windows + Ubuntu), protocol suite + transport suite + command scenario suite all passing as a single `ctest` run from a clean clone; verify by re-running CI from scratch on a fresh fork/branch after a code cleanup pass
+- [x] 7.6 Final integration check: full CI matrix green on the completed implementation (Windows + Ubuntu), protocol suite + transport suite + command scenario suite all passing as a single `ctest` run from a clean clone; verify by re-running CI from scratch on a fresh fork/branch after a code cleanup pass
 
 ## Workflow follow-up
 
