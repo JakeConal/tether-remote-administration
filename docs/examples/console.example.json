@@ -3,5 +3,6 @@
     "port": 47474,
     "token_store_path": "/etc/tether/tokens.json",
     "audit_path": "/var/lib/tether/audit.jsonl",
+    "agent_dial_wait_ms": 10000,
     "gmail": null
 }
