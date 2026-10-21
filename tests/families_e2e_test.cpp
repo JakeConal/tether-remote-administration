@@ -79,7 +79,9 @@
 #include <vector>
 
 #if defined(_WIN32)
+#ifndef NOMINMAX // already set by an included header's windows.h chain
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <shlobj.h>
 #if defined(_MSC_VER)
@@ -595,7 +597,7 @@ public:
             if (!fs::exists(path)) {
                 return nullptr;
             }
-            const tcom::ConsoleConfig config = tcom::load_console_config(path);
+            const tcom::ConsoleConfig config = tcom::load_console_config(path.string());
             if (!config.audit_path.has_value() || config.audit_path->empty()) {
                 return nullptr;
             }
