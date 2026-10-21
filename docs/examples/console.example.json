@@ -1,0 +1,7 @@
+{
+    "listen_address": "0.0.0.0",
+    "port": 47474,
+    "token_store_path": "/etc/tether/tokens.json",
+    "audit_path": "/var/lib/tether/audit.jsonl",
+    "gmail": null
+}

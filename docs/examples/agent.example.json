@@ -1,0 +1,7 @@
+{
+    "console_address": "10.0.0.5",
+    "console_port": 47474,
+    "agent_name": "lab-1",
+    "instance_id": "lab-1",
+    "token": "--- provisioned at agent install; keep in sync with the console token store ---"
+}
