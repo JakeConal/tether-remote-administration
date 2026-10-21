@@ -186,3 +186,6 @@ set_tests_properties(
     command-session-test input-family-test app-family-test audit-test
     families-e2e-test
     PROPERTIES TIMEOUT 600)
+# The e2e suite runs in ~2 s when healthy; a tighter wall clock keeps diagnosis
+# cycles fast (the per-case stderr markers name any wedging case on timeout).
+set_tests_properties(families-e2e-test PROPERTIES TIMEOUT 150)

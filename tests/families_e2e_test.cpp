@@ -117,6 +117,18 @@ fs::path fresh_scratch_dir(const char* prefix) {
     return dir;
 }
 
+// Unbuffered progress markers on stderr: if a case wedges on a platform, the
+// last marker still in the captured log names it exactly (std::cerr is
+// unit-buffered and survives even a hard process termination).
+void e2e_trace(const std::string& message) {
+    std::cerr << "[e2e] " << message << std::endl;
+}
+
+struct CaseTrace {
+    explicit CaseTrace(const std::string& name) { e2e_trace("enter " + name); }
+    ~CaseTrace() { e2e_trace("exit"); }
+};
+
 // ---- tiny guards over the logger (status noise must not leak into output) ----
 
 class NullLogSink final : public tcom::LogSink {
@@ -517,6 +529,8 @@ struct Habitat {
         wire_dispatcher(wiring);
         write_console_config();
         build_app_fixtures(apps);
+        e2e_trace("habitat up, console port " +
+                  std::to_string(console.listening_port()));
     }
 
 private:
@@ -728,6 +742,7 @@ bool byte_exactly_two_status_lines(const std::string& err, const std::string& de
 
 // process (real per-OS backend, platform in use): list + a benign start/stop.
 TEST_CASE("process family over the CLI: list then a benign start and stop of a real child") {
+    CaseTrace case_trace("process-family-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}};
     REQUIRE(established_handshake(habitat));
@@ -788,6 +803,7 @@ TEST_CASE("process family over the CLI: list then a benign start and stop of a r
 // file (real std::filesystem): list + the confirmed write path in a temp dir +
 // the unconfirmed delete refusals at BOTH gates.
 TEST_CASE("file family over the CLI: list, confirmed delete removes the file, unconfirmed refuses") {
+    CaseTrace case_trace("file-family-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}};
     REQUIRE(established_handshake(habitat));
@@ -857,6 +873,7 @@ TEST_CASE("file family over the CLI: list, confirmed delete removes the file, un
 
 // power: REFUSAL PATHS ONLY - never a real shutdown/restart on this machine.
 TEST_CASE("power family over the CLI: refusals only, nothing ever reaches a power backend") {
+    CaseTrace case_trace("power-family-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}};
     REQUIRE(established_handshake(habitat));
@@ -893,6 +910,7 @@ TEST_CASE("power family over the CLI: refusals only, nothing ever reaches a powe
 // capture: the fake source's screenshot rides the file channel byte-exact
 // (delivered capture), plus the REAL per-OS grab smoke on this platform.
 TEST_CASE("capture family over the CLI: the fake capture delivers byte-exact over the wire") {
+    CaseTrace case_trace("capture-fake-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}}; // fake screen source
     REQUIRE(established_handshake(habitat));
@@ -922,6 +940,7 @@ TEST_CASE("capture family over the CLI: the fake capture delivers byte-exact ove
 }
 
 TEST_CASE("capture family on the platform in use: the REAL per-OS grab produces a decodable image") {
+    CaseTrace case_trace("capture-real-grab");
     silence_logging();
     AgentWiring wiring{}; // the REAL per-OS grab below the CLI: GDI / X11, per compile
     wiring.real_screen_capture = true;
@@ -955,6 +974,7 @@ TEST_CASE("capture family on the platform in use: the REAL per-OS grab produces 
 // camera: the managed background job over the fake device - start, the
 // duplicate-start refusal, and the stop that delivers the accumulated capture.
 TEST_CASE("camera family over the CLI: start, duplicate-refuse, stop-and-deliver") {
+    CaseTrace case_trace("camera-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}}; // fake camera device
     REQUIRE(established_handshake(habitat));
@@ -1006,6 +1026,7 @@ TEST_CASE("camera family over the CLI: start, duplicate-refuse, stop-and-deliver
 // input: the keylogger job through the REAL file sink into a temp storage,
 // stop-delivered events, and the Wayland-structured refusal via probe injection.
 TEST_CASE("input family over the CLI: keylogger job start/stop with temp storage and delivered events") {
+    CaseTrace case_trace("input-keylogger-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}}; // capable environment
     REQUIRE(established_handshake(habitat));
@@ -1051,6 +1072,7 @@ TEST_CASE("input family over the CLI: keylogger job start/stop with temp storage
 }
 
 TEST_CASE("input family over the CLI: a Wayland environment refuses structurally and never wedges") {
+    CaseTrace case_trace("input-wayland-refusal");
     silence_logging();
     AgentWiring wiring{}; // only the environment probe differs from the defaults
     wiring.input_environment =
@@ -1088,6 +1110,7 @@ TEST_CASE("input family over the CLI: a Wayland environment refuses structurally
 // app: real per-OS store fixtures - list, a craft-launch observed verbatim,
 // and the stop that ends the child.
 TEST_CASE("app family over the CLI: list, craft-launch of a probe child, stop") {
+    CaseTrace case_trace("app-over-cli");
     silence_logging();
     Habitat habitat{AgentWiring{}}; // the habitat built the per-OS fixtures
     REQUIRE(established_handshake(habitat));
@@ -1154,6 +1177,7 @@ TEST_CASE("app family over the CLI: list, craft-launch of a probe child, stop") 
 // audit: THE E2E RUN's trail - executed / refused / failed command records
 // plus background-job lifecycle events, persisted JSONL with required fields.
 TEST_CASE("the gauntlet leaves an audit trail spanning executed, refused, failed and job events") {
+    CaseTrace case_trace("audit-gauntlet");
     silence_logging();
     Habitat habitat{AgentWiring{}};
     REQUIRE(established_handshake(habitat));
@@ -1277,6 +1301,7 @@ TEST_CASE("the gauntlet leaves an audit trail spanning executed, refused, failed
 // the unknown-command refusal path also rides the CLI over the wire: a
 // structured refusal from the closed set that leaves the session usable.
 TEST_CASE("an unknown command over the CLI is refused harmlessly and the session keeps serving") {
+    CaseTrace case_trace("unknown-command-refusal");
     silence_logging();
     Habitat habitat{AgentWiring{}};
     REQUIRE(established_handshake(habitat));
