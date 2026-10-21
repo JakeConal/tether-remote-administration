@@ -152,10 +152,13 @@ Every real-time test uses a **budget** and a polling loop:
 | `handshake_until_established` | 1,500 ms | `tcp_loopback_test.cpp`, `transport_equiv_test.cpp`, `cli_integration_test.cpp` |
 | `pump_until_terminal` | 400 ms | the same |
 | `console_goes_down_within` | window + tolerance | `tcp_loopback_test.cpp` |
-| `await_probe` | ~400 ms | `camera_family_test.cpp` |
+| `await_probe` | ~400 s (2,000,000 × 200 µs) | `camera_family_test.cpp` |
 
-A wait that times out **fails loudly at the call site** rather than returning
-a "probably fine" value.
+Most of these helpers return `bool` and are wrapped in `REQUIRE`, so a timeout
+**fails loudly at the call site**. One exception: the transport-equivalence
+suite's `pump_until_terminal` returns `void` and simply gives up on a
+timeout — there, a timeout shows up as a downstream assertion failure rather
+than a named one.
 
 ### The e2e watchdog
 
@@ -176,7 +179,7 @@ whole-suite run finishes inside two minutes.
 | --- | --- | --- |
 | Webcam | `FakeFrameSource` | `camera_family_test.cpp` |
 | Screen | `FakeScreenCapture` (a real 4×4 PNG) | `capture_family_test.cpp` |
-| Keyboard events | `FakeKeyEventSource` | `input_family_test.cpp` |
+| Keyboard events | `FakeSource` | `input_family_test.cpp` |
 | Power backend | `FakePowerControl`, `FakeLogindBinding` | `power_family_test.cpp` |
 | Process control (in the matrix suite) | `FakeProcessControl` | `matrix_test.cpp` |
 | Gmail API | `FakeGmailClient`, `RecordingDispatcher` | `gmail_test.cpp` |
@@ -197,7 +200,7 @@ spawns the actual `tether-agent` binary and hard-kills it.
 ## 5. The CI
 
 `.github/workflows/ci.yml`. Runs on every push to `main` and every pull
-request.
+request **targeting `main`**.
 
 ```yaml
 strategy:
@@ -266,6 +269,12 @@ TEST_CASE("the outcome of a new behaviour is explicit") {
    target_link_libraries(tether-<area>-tests PRIVATE doctest::doctest tether-<dep>)
    add_test(NAME <area>-test COMMAND tether-<area>-tests)
    ```
+
+   The existing binaries do not follow a strict file-name-to-target mapping —
+   `tcp_loopback_test.cpp` builds `tether-tcp-tests`, `file_family_test.cpp`
+   builds `tether-file-tests`, `capture_family_test.cpp` builds
+   `tether-capture-tests`. Pick a name and keep it consistent within your
+   change.
 
 3. Add the ctest name to the `set_tests_properties(... PROPERTIES TIMEOUT 600)`
    list.

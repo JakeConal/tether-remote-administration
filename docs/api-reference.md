@@ -37,7 +37,7 @@ struct AgentConfig {
     std::string console_address;
     int console_port = 47474;
     std::string agent_name;
-    std::string instance_id;   // defaults to agent_name when absent
+    std::string instance_id;   // empty when absent; the agent falls back to agent_name
     std::string token;
 };
 
@@ -194,8 +194,8 @@ std::size_t max_payload_bytes_for(MsgType type);
 class ProtocolError : public std::runtime_error {
 public:
     enum class Code {
-        UnknownVersion, OversizePayload, Truncated,
-        MalformedPayload, BadArgument, CryptoFailure, UnknownType,
+        UnknownVersion, UnknownType, OversizePayload, Truncated,
+        MalformedPayload, BadArgument, CryptoFailure,
     };
     ProtocolError(Code code, const std::string& message);
     Code code() const noexcept;
@@ -423,15 +423,15 @@ ConsoleTransportSet build_console_transports(
 ### TCP (`tcp.hpp`)
 
 ```cpp
-class TcpByteStream : public protocol::IByteSource, public protocol::IByteSink {
+class TcpByteStream final : public protocol::IByteSource, public protocol::IByteSink {
 public:
     // read()/write()/shutdown() as per the byte-stream interfaces
 };
 
-class TcpConsoleTransport : public ITransport {
+class TcpConsoleTransport final : public ITransport {
 public:
     explicit TcpConsoleTransport(ConsoleTransportOptions options);
-    void start();                       // resolve → open → bind → listen → accept
+    void start();                       // bind → listen → begin accepting
     std::uint16_t listening_port() const noexcept;
     // ITransport:
     std::uint32_t issue(...) override;
@@ -461,7 +461,7 @@ std::int64_t next_backoff_ms(std::int64_t current, const DialPolicy& policy);
 std::unique_ptr<TcpAgentLink> establish_with_retries(
     const AgentEndpoint& endpoint, const protocol::AgentIdentity& identity,
     const std::string& token, const protocol::SessionConfig& config,
-    const DialPolicy& policy, std::size_t max_attempts = 0);
+    DialPolicy policy, std::size_t max_attempts = 0);
 ```
 
 `max_attempts == 0` means **retry forever**. The backoff sequence is
@@ -473,32 +473,57 @@ std::unique_ptr<TcpAgentLink> establish_with_retries(
 class HttpClient {
 public:
     virtual ~HttpClient() = default;
-    virtual std::string post_form(const std::string& url,
-                                  const std::vector<std::string>& form_fields) = 0;
-    virtual std::string get(const std::string& url,
-                            const std::vector<std::string>& headers) = 0;
-    virtual std::string post_json(const std::string& url,
-                                  const std::vector<std::string>& headers,
-                                  const std::string& body) = 0;
+    virtual std::string post_form(
+        const std::string& url,
+        const std::vector<std::pair<std::string, std::string>>& form) = 0;
+    virtual std::string get(
+        const std::string& url,
+        const std::vector<std::pair<std::string, std::string>>& headers) = 0;
+    virtual std::string post_json(
+        const std::string& url,
+        const std::vector<std::pair<std::string, std::string>>& headers,
+        const std::string& json_body) = 0;
+};
+
+struct GmailCredentials {
+    std::string account;       // the adapter account the service authenticates as
+    std::string client_id;
+    std::string client_secret;
+    std::string refresh_token;
+};
+
+GmailCredentials load_gmail_credentials(const std::string& path);
+
+struct MailMessage {
+    std::string id;
+    std::string from;      // "Name <addr>" or a bare address
+    std::string to;        // the raw To header value
+    std::string subject;
+    std::string body_text; // the decoded text/plain payload
+};
+
+struct MailAttachment {
+    std::string filename;
+    std::vector<unsigned char> bytes;
 };
 
 class GmailClient {
 public:
     virtual ~GmailClient() = default;
     virtual std::vector<std::string> list_inbox_ids(std::size_t max_results) = 0;
-    virtual GmailMessage fetch(const std::string& id) = 0;
-    virtual void send_raw(const std::string& raw_mime) = 0;
+    virtual MailMessage fetch(const std::string& id) = 0;
+    virtual std::string send_raw(const std::string& mime) = 0;  // returns the new id
 };
+
+std::unique_ptr<GmailClient> make_google_gmail_client(
+    std::shared_ptr<HttpClient> http, GmailCredentials credentials);
+std::unique_ptr<HttpClient>   make_curl_http_client();
 
 class GmailTransport final : public ITransport {
 public:
     // issue() ALWAYS throws: mail is the issuance mechanism, not the
     // programmatic one. pump() performs at most one poll cycle.
 };
-
-std::shared_ptr<HttpClient>   make_curl_http_client();
-std::shared_ptr<GmailClient>  make_google_gmail_client(
-    std::shared_ptr<HttpClient> http, const GmailCredentials& credentials);
 ```
 
 The acceptance rule: the sender must be on `admin_list` **and** the `To`
@@ -867,10 +892,21 @@ continuing unaudited.
 ### TCP console (`tcp_console.hpp`)
 
 ```cpp
-class TcpOperConsole : public IOperConsole {
+class TcpOperConsole final : public IOperConsole {
 public:
-    explicit TcpOperConsole(std::unique_ptr<transport::ITransport> transport);
-    void set_agent_dial_budget_ms(std::int64_t ms);
+    using Clock = std::function<transport::TransportMillis()>;
+
+    // Taking OWNERSHIP of a started transport (the production path).
+    explicit TcpOperConsole(std::unique_ptr<transport::TcpConsoleTransport> owned,
+                            Clock clock = transport::monotonic_now_ms,
+                            std::function<void()> side_pump = nullptr);
+    // Borrowing a transport the caller keeps alive (tests).
+    explicit TcpOperConsole(transport::TcpConsoleTransport& borrowed,
+                            Clock clock = transport::monotonic_now_ms,
+                            std::function<void()> side_pump = nullptr);
+
+    void set_dispatch_budget_ms(std::int64_t budget);   // default 65'000
+    void set_agent_dial_budget_ms(std::int64_t budget); // default 0 = no wait
     // IOperConsole: list_agents, has_agent, dispatch, cancel
 };
 ```

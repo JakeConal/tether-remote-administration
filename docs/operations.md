@@ -60,7 +60,8 @@ $ tether-console --config /etc/tether/console.json exec lab-1 ls /etc
 Each invocation binds the listener, waits for the agent's dial-in, serves the
 verb, and exits. Because the agent dials on a backoff, **the first invocation
 after a console restart may need to wait** — the default `agent_dial_wait_ms`
-of 10,000 ms covers one full agent backoff cycle.
+of 10,000 ms covers the agent's re-dial cadence (it retries at most every
+10 s).
 
 For a scripted batch, invoke the console once per verb and accept the
 per-invocation wait, or raise `agent_dial_wait_ms` to cover the worst-case
@@ -85,12 +86,16 @@ The **token is never logged**.
 
 ### The audit trail
 
-Set `audit_path` in the console config. Each line is a JSON object:
+Set `audit_path` in the console config. Each line is a JSON object with **twelve** keys — the writer always emits all
+of them, and the loader requires all of them:
 
 ```json
-{"time":"2026-10-21T18:05:02.114Z","time_epoch_ms":1791245102114,"agent":"lab-1","command":"delete","parameters":["/tmp/scratch.txt"],"seq":1,"outcome":"executed","record_type":"command","detail":""}
-{"time":"2026-10-21T18:05:09.882Z","time_epoch_ms":1791245109882,"agent":"lab-1","command":"start_keylogger","parameters":["/tmp/keys.log"],"seq":2,"outcome":"executed","record_type":"job_event","event":"started","job":"input"}
+{"agent":"lab-1","command":"delete","delivered":"","detail":"","event":"","job":"","outcome":"executed","parameters":["/tmp/scratch.txt"],"record_type":"command","seq":1,"time":"2026-10-21T18:05:02.114Z","time_epoch_ms":1791245102114}
+{"agent":"lab-1","command":"start_keylogger","delivered":"","detail":"","event":"started","job":"input","outcome":"executed","parameters":["/tmp/keys.log"],"record_type":"job_event","seq":2,"time":"2026-10-21T18:05:09.882Z","time_epoch_ms":1791245109882}
 ```
+
+(The key order above is alphabetical because the JSON object is key-sorted; the
+field order in the record struct is the one described in the table below.)
 
 Reading it:
 
@@ -135,13 +140,13 @@ progress channel.
 | `error: file delivery incomplete: expected N bytes, received M`, exit 1 | console stderr | The transfer was short | The session probably dropped mid-transfer; retry |
 | `error: console setup failed: …`, exit 1 | console stderr | The config or the token store is bad | The message names the file and the field |
 | `error: dispatch failed: …`, exit 1 | console stderr | The transport failed | Check that the console can bind the port |
-| `unknown agent identity '<x>'` | agent log | The identity is not in the token store, or the token is empty | The names must match **exactly** |
-| `refusing to dial out with an empty provisioned token` | agent log, exit 1 | The agent's `token` is empty | Provision the token |
+| `refused: unknown agent identity '<x>'` | **console** log | The identity is not in the token store, or the token is empty | The names must match **exactly**. The agent's own log shows only the error *code*: `refused by console during handshake: auth_failed` |
+| `refused during handshake by peer: auth_failed` | **console** log | The agent's answer did not verify | The tokens differ, or the identity is unknown |
+| The agent aborts with `refusing to dial out with an empty provisioned token` | agent stderr (uncaught exception) | The agent's `token` is empty | Provision the token. The `SessionError` is not caught by the agent's main loop, so the process terminates abnormally rather than exiting cleanly. |
 | `dial-out attempt failed` (repeated) | agent log | The console is unreachable | Check the address, the port, and the firewall |
 | `dial-out backed off` (repeated) | agent log | Normal — the console is not up yet | Expected while the console is down |
 | `session down; redialing` | agent log | The session dropped | Expected when the console restarts |
-| `refused: handshake did not complete in time` | agent log | The console did not answer the challenge in 10 s | Usually a clock or a very loaded machine |
-| `refused during handshake by peer: auth_failed` | agent log | The token does not verify | The tokens differ, or the identity is unknown |
+| `refused: handshake did not complete within auth_timeout` | **console** log | The console did not answer the challenge in 10 s | Usually a clock or a very loaded machine. The agent's equivalent is `refused: console did not complete the handshake within auth_timeout`. |
 | `keepalive window elapsed without any life sign from the peer` | either log | The peer stopped responding for 30 s | A network or a load problem |
 | `no X display is reachable (is DISPLAY set?)` | command result | The Linux agent has no X server | Run the agent in a graphical session, or under Xvfb |
 | `'lock_keyboard' is unsupported in this environment` | command result | A Wayland-only host | The input family needs X11. The session stays usable. |
@@ -180,10 +185,12 @@ progress channel.
 
 ### Provisioning a new agent
 
-1. Generate a high-entropy token:
+1. Generate a high-entropy token (32 random bytes, hex-encoded):
    ```sh
    openssl rand -hex 32
    ```
+   (The project's own crypto stack is mbedTLS; `openssl` is used here only as
+   a convenient random-number source, not as a runtime dependency.)
 2. Add it to the console's token store under the agent's `agent_name`.
 3. Put the same token in the agent's config.
 4. Start the agent.

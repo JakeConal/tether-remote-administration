@@ -91,15 +91,19 @@ Template: [`docs/examples/agent.example.json`](examples/agent.example.json).
 
 ### The `token` field
 
-An empty `token` is **structurally valid** at load time — the shipped example
-templates ship that way. The refusal happens later, at the session:
+An empty `token` is **structurally valid** at load time — the root
+`agent.example.json` ships that way. The refusal happens later, at the
+session:
 
 ```
 refusing to dial out with an empty provisioned token
 ```
 
-The agent then exits with code 1. This is deliberate: the config layer does
-structural validation, the session layer enforces the credential.
+That refusal is a thrown `SessionError`, and the agent's main loop does **not**
+catch it (it catches `ConfigError` and `TransportError` only), so the process
+terminates abnormally rather than exiting cleanly with a structured message.
+The fix is to put the same token in the agent config and in the console's
+token store.
 
 ### `instance_id` is read leniently
 
@@ -116,7 +120,7 @@ documented feature.
 | Malformed JSON | `<path>: malformed JSON (<nlohmann what()>)` |
 | Root is not an object | `<path>: config root must be a JSON object` |
 | Missing required field | `<path>: missing required field '<field>'` |
-| Wrong type | `<path>: field '<field>' must be a string` |
+| Wrong type | `<path>: field '<field>' must be a string` / `... must be an integer` |
 | Port out of range | `<path>: field 'console_port' must be an integer in [1, 65535]` |
 
 ---
@@ -137,12 +141,18 @@ Template: [`docs/examples/tokens.example.json`](examples/tokens.example.json).
 
 | Problem | Message |
 | --- | --- |
-| File missing or unreadable | `token store '<path>' cannot be opened` |
+| The file exists but cannot be opened | `token store '<path>' cannot be opened` |
 | Root is not an object | `token store '<path>' must be a JSON object of agent names to tokens` |
 | A value is not a string | `token store '<path>' entry '<key>' is not a string` |
 
 ### Semantics
 
+- A **missing** token-store file is **not** an error: the console silently
+  treats it as an empty store, and every agent is then refused at the
+  handshake with `unknown agent identity '<x>'`.
+- A **malformed** token-store file raises a raw JSON parse error rather than a
+  `ConfigError` — the store is parsed with `nlohmann::json::parse` outside the
+  config loader's error handling.
 - An identity that is **not** in the store is refused at the handshake,
   **before** any challenge is issued — the agent learns nothing verifiable.
 - A store whose value is the empty string is treated as "no token": the agent
@@ -227,9 +237,25 @@ Gmail-enabled config builds it exactly once through
 | Variable | Used by | Meaning |
 | --- | --- | --- |
 | `TETHER_AGENT_EXE` | `tests/tcp_loopback_test.cpp` | Overrides the path to the `tether-agent` binary the loopback suite spawns. |
-| `TETHER_PROBE_EXE` | `tests/process_family_test.cpp`, `tests/app_family_test.cpp` | Overrides the path to the `tether-argv-probe` helper child. |
+| `TETHER_PROBE_EXE` | `tests/process_family_test.cpp`, `tests/app_family_test.cpp`, `tests/families_e2e_test.cpp` | Overrides the path to the `tether-argv-probe` helper child. |
 
-Nothing in the production binaries reads the environment.
+### Environment variables the production binaries read
+
+The shipped binaries read a small, fixed set of standard environment
+variables to locate per-user resources. They are read once at startup and are
+never credentials:
+
+| Variable | Read by | Meaning |
+| --- | --- | --- |
+| `APPDATA` | `lib/syscalls/app.cpp` | The per-user Start-menu root on Windows. Absent ⇒ that root contributes nothing. |
+| `ProgramData` | `lib/syscalls/app.cpp` | The machine-wide Start-menu root on Windows. |
+| `XDG_DATA_HOME` | `lib/syscalls/app.cpp` | The per-user `.desktop` root on Linux. |
+| `XDG_DATA_DIRS` | `lib/syscalls/app.cpp` | The machine-wide `.desktop` roots on Linux. |
+| `HOME` | `lib/syscalls/app.cpp` | The fallback per-user `.desktop` root on Linux. |
+| `XDG_SESSION_TYPE` | `lib/syscalls/input.cpp` | The input-family environment probe: `wayland` vs `x11`. |
+
+Nothing else in the tree reads the environment, and no credential is ever
+taken from it.
 
 ---
 

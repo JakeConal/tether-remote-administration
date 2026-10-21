@@ -9,7 +9,7 @@ From a clean clone to a live, authenticated session — on Windows or Linux.
 | Tool | Version | Notes |
 | --- | --- | --- |
 | [CMake](https://cmake.org/download/) | ≥ 3.24 | Required by the root `CMakeLists.txt`. |
-| A C++17 toolchain | MSVC ≥ 2022, GCC ≥ 11, or Clang ≥ 13 | The build sets `CMAKE_CXX_STANDARD 17`, `CMAKE_CXX_STANDARD_REQUIRED ON`, `CMAKE_CXX_EXTENSIONS OFF`. |
+| A C++17 toolchain | MSVC, GCC, or Clang | The build sets `CMAKE_CXX_STANDARD 17`, `CMAKE_CXX_STANDARD_REQUIRED ON`, `CMAKE_CXX_EXTENSIONS OFF`. The project is built and tested on `windows-latest` (MSVC) and `ubuntu-latest` (GCC). |
 | [vcpkg](https://github.com/microsoft/vcpkg) | latest | Manifest mode. Clone and bootstrap once, or point `VCPKG_INSTALLATION_ROOT` at a CI image's copy. |
 | (Linux) `libx11-dev` | distro package | The Linux capture family links X11. |
 | (Linux) `xvfb` | distro package | Needed **at test time** for the screenshot suites. |
@@ -38,8 +38,10 @@ cmake --build build --config Release --parallel
 ctest --test-dir build --output-on-failure -C Release
 ```
 
-Those three commands are exactly what CI runs from a clean clone on both legs
-(`windows-latest`, `ubuntu-latest`).
+Those three commands are the same sequence CI runs from a clean clone on both
+legs (`windows-latest`, `ubuntu-latest`). CI adds `--parallel N` and a JUnit
+output file to the `ctest` invocation, and wraps the Linux leg in
+`xvfb-run -a`.
 
 **Where the binaries land**
 
@@ -127,12 +129,13 @@ backoff and keeps dialing until a console invocation meets it.
 
 ```console
 $ tether-agent --config agent.json
-{"timestamp":"2026-10-21T18:04:11Z","level":"info","message":"config loaded",...}
-{"timestamp":"2026-10-21T18:04:11Z","level":"info","message":"dial-out connected; starting session",...}
+2026-10-21T18:04:11Z [info] config loaded console_address=10.0.0.5 console_port=47474 agent_name=lab-1
+2026-10-21T18:04:11Z [info] dial-out connected; starting session agent=lab-1 state=connecting
 ```
 
-The agent never exits because the console is absent — it retries forever
-(500 ms, doubling to a 10 s cap). The token is never logged.
+Logs go to **stderr** in a plain-text `timestamp [level] message key=value…`
+format. The agent never exits because the console is absent — it retries
+forever (500 ms, doubling to a 10 s cap). The token is never logged.
 
 ### 4.2 Run a console verb (on the operator machine)
 
@@ -158,9 +161,11 @@ $ tether-console --config console.json exec lab-1 start_webcam
 $ tether-console --config console.json exec lab-1 stop_webcam > frame.png
 ```
 
-> **`agents` shows one row per identity.** Because the console's registry is
-> per-invocation, `agents` reports what registered during *that* invocation —
-> typically the agent that dialed in while the verb was waiting.
+> **`agents` shows one row per registry entry.** Because the console's
+> registry is per-invocation, `agents` reports what registered during *that*
+> invocation — typically the agent that dialed in while the verb was waiting.
+> A superseded-but-still-connected session of the same identity appears as an
+> extra `stale` row, so an identity can be listed twice.
 
 ### 4.3 Exit codes
 
@@ -174,22 +179,28 @@ $ tether-console --config console.json exec lab-1 stop_webcam > frame.png
 
 ---
 
-## 5. Destructive commands need two confirmations
+## 5. Destructive commands need confirmation
 
-Destructive verbs (`delete`, `move`, `copy`, `shutdown`, `restart`) must pass
-**two independent gates**:
+Five verbs are marked destructive in the capability matrix: `delete`, `move`,
+`copy`, `shutdown`, `restart`. Two independent gates apply — and they cover
+**different** sets of verbs.
 
-1. **Console gate** — `--yes`, or an interactive `y` on a TTY. Without it the
-   console refuses locally: nothing is sent, exit code `4`.
-2. **Agent gate** — the command's first argument must be the literal token
-   `confirm`. Without it the agent refuses: nothing is executed.
+| Gate | Where | Verbs | What it refuses |
+| --- | --- | --- | --- |
+| **Console** | `console/cli.cpp` | `delete`, `shutdown`, `restart` | Nothing is sent; exit code **4**. |
+| **Agent** | `lib/syscalls/matrix.cpp` | all five | Nothing is executed; `missing_confirmation`, exit code 1. |
+
+The console gate needs `--yes`, or an interactive `y` on a TTY. The agent gate
+needs the command's first argument to be the literal token `confirm`.
 
 ```console
 $ tether-console --config console.json exec lab-1 delete confirm /tmp/scratch.txt --yes
 deleted /tmp/scratch.txt
 ```
 
-The console does **not** inject `confirm` for you. Both are required.
+The console does **not** inject `confirm` for you. For `delete`, `shutdown`
+and `restart` both gates apply; for `move` and `copy` only the agent gate
+does, so the console dispatches them and the agent refuses them.
 
 ---
 
@@ -209,12 +220,13 @@ bash scripts/demo.sh ./build ./demo-run
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `error: unknown agent 'lab-1'` (exit 3) | The agent had not dialed in within `agent_dial_wait_ms` | Start the agent first; or raise `agent_dial_wait_ms` (the default 10 s covers one full agent backoff cycle) |
-| The console exits with `error: console setup failed: …` | The config file is missing, malformed, or names a bad field | The message names the file and the field; see [configuration.md](configuration.md) |
-| `error: unknown agent identity 'lab-1'` in the agent log | The identity is not in the console's token store, or the spelling differs | The token store keys must match `agent_name` **exactly** |
+| `error: unknown agent 'lab-1'` (exit 3) | The agent had not dialed in within `agent_dial_wait_ms` | Start the agent first; or raise `agent_dial_wait_ms` (the default 10 s covers the agent's re-dial cadence) |
+| The console exits with `error: console setup failed: …` | The config file is **malformed**, missing a required field, or naming a bad field | The message names the file and the field; see [configuration.md](configuration.md). A **missing** console config file is *not* an error — it falls back to `127.0.0.1`, an ephemeral port, and no token store (so every agent is then refused). |
+| `refused: unknown agent identity 'lab-1'` in the **console** log | The identity is not in the console's token store, or the spelling differs | The token store keys must match `agent_name` **exactly**. The agent's own log shows only `refused by console during handshake: auth_failed`. |
 | The console refuses every agent | The token store is empty or the tokens differ from the agents' | A token mismatch fails the HMAC handshake → `auth_failed` |
 | `error: refusal: 'delete' on 'lab-1' is destructive and was not confirmed` | The console gate was not satisfied | Add `--yes` (and the literal `confirm` argument) |
 | `error: command failed: missing_confirmation` | The agent gate was not satisfied | Put `confirm` first: `exec lab-1 delete confirm <path> --yes` |
+| The agent aborts with `refusing to dial out with an empty provisioned token` | The agent's `token` field is empty | Put the same token in the agent config and the console's token store. The refusal is a thrown `SessionError` that is **not** caught by the agent's main loop, so the process terminates abnormally rather than exiting cleanly. |
 | The screenshot fails with a `DISPLAY` message | The Linux agent has no reachable X server | Run the agent under a graphical session, or use Xvfb — the capture family is X11-only on Linux |
 | `unsupported_platform` on `lock_keyboard` | The host is Wayland-only | The input family needs X11; the refusal is structured and the session stays usable |
-| The agent logs `refusing to dial out with an empty provisioned token` | The agent's `token` field is empty | Put the same token in the agent config and the console's token store |
+| The agent logs `dial-out attempt failed` (repeatedly) | The console is unreachable | Check the address, the port, and the firewall |

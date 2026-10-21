@@ -11,7 +11,7 @@ This set is written for two audiences:
 - **Readers learning the project** — how the pieces fit together, what the
   protocol looks like on the wire, and how the command surface behaves.
 
-Every factual claim here is pinned to the source tree. Where a document
+Every factual claim here is checked against the source tree. Where a document
 describes behaviour, the behaviour is enforced by a test (see
 [testing.md](testing.md)) or by a code path that is named inline.
 
@@ -72,6 +72,7 @@ tether administers machines **you own or are explicitly authorized to
 administer**. The keylogger, keyboard-lock, process-control, and file
 surfaces exist as explicit, audit-visible console commands. There are no
 stealth features: nothing hides, nothing persists behind the operator's back,
-and destructive commands are refused by default at both ends until explicitly
-confirmed. See [security.md](security.md) and
+and destructive commands are refused by default until explicitly confirmed —
+at the console for `delete`/`shutdown`/`restart`, and at the agent for all
+five destructive verbs. See [security.md](security.md) and
 [readiness-decisions.md](readiness-decisions.md) for the full policy record.

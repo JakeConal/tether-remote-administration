@@ -37,7 +37,7 @@ tether is a two-runtime tool for administering machines you own from one operato
 - **Auditability.** The console's optional JSONL audit trail records every command attempt with time, agent identity, command, arguments, seq, and outcome.
 
 > [!IMPORTANT]
-> **Authorized use only.** The keylogger, keyboard lock, process control, and file operations exist exclusively for administering machines **you own or are explicitly authorized to administer**. Every action is an explicit, audit-visible console command; there are no stealth features — nothing hides, nothing persists behind the operator's back — and destructive commands are refused by default at both ends until explicitly confirmed. See [docs/readiness-decisions.md](docs/readiness-decisions.md) for the policy record.
+> **Authorized use only.** The keylogger, keyboard lock, process control, and file operations exist exclusively for administering machines **you own or are explicitly authorized to administer**. Every action is an explicit, audit-visible console command; there are no stealth features — nothing hides, nothing persists behind the operator's back — and destructive commands are refused by default until explicitly confirmed: at the console for `delete`/`shutdown`/`restart`, and at the agent for all five destructive verbs. See [docs/readiness-decisions.md](docs/readiness-decisions.md) for the policy record and [docs/security.md](docs/security.md) for the security model.
 
 ## Getting started
 
@@ -118,7 +118,7 @@ All nineteen commands ride one console verb: `tether exec <agent> <command> [arg
 
 ### The confirm gate
 
-Destructive verbs require deliberate confirmation **twice**: the console refuses outright without `--yes` or an interactive `y/N` — nothing reaches the agent — and even then the agent's own gate refuses unless the command's first argument is the literal `confirm` token.
+Destructive verbs require deliberate confirmation, enforced by **two independent gates** covering different verb sets. The console refuses outright without `--yes` or an interactive `y/N` — nothing reaches the agent — for `delete`, `shutdown`, and `restart`. The agent's own gate refuses any destructive command — including `move` and `copy`, which the console does not gate — unless the command's first argument is the literal `confirm` token.
 
 ```console
 $ tether exec lab-1 delete confirm /tmp/scratch.txt --yes

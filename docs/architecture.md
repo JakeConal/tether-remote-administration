@@ -46,7 +46,7 @@ agent's next dial to land.
 
 ## 2. Layers
 
-Five static libraries and two executables. Each layer only knows about the
+Six static libraries and two executables. Each layer only knows about the
 layer(s) beneath it.
 
 ```
@@ -55,20 +55,25 @@ layer(s) beneath it.
         ▼                              ▼
   tether-cli                  tether-command-handler
   (console/cli, tcp_console,  (agent/command_handler)
-   audit)
-        │                              │
-        ▼                              ▼
-  tether-transport ◄──────────────────┘
-  (transport, tcp, gmail, gmail_cpr)
-        │
-        ▼
-  tether-protocol
+   audit)                            │        │
+        │                            ▼        ▼
+        ▼                    tether-syscalls  tether-transport
+  tether-transport          (matrix + 7      (transport, tcp, gmail,
+  (transport, tcp, gmail,    families +       gmail_cpr)
+   gmail_cpr)                jobs)                 │
+        │                                           │
+        ▼                                           │
+  tether-protocol ◄─────────────────────────────────┘
   (envelope, payloads, handshake, session, bytes)
         │
         ▼
-  tether-common                tether-syscalls
-  (config, logging, base64)   (matrix + 7 families + jobs)
+  tether-common
+  (config, logging, base64)
 ```
+
+`lib/syscalls` is deliberately self-contained: it includes no common, protocol,
+or transport header, so the command surface cannot reach the wire or the
+console by accident.
 
 | Layer | Target | Responsibility | Must not know about |
 | --- | --- | --- | --- |
@@ -80,7 +85,10 @@ layer(s) beneath it.
 | `tether-command-handler` | `tether-command-handler` | Mapping a `Cmd` frame onto a family call and its reply pieces | stdio, exit codes |
 
 The dependency edges are all `PUBLIC`/`PRIVATE`-declared in CMake; nothing uses
-file globbing; there are no cycles.
+file globbing; there are no cycles. Note that `tether-cli` also links
+`tether-protocol` directly (it speaks `protocol::Cmd` and
+`protocol::CommandView`), and `tether-command-handler` links `tether-syscalls`
+directly — the diagram above shows the main flows, not every edge.
 
 ---
 
@@ -111,8 +119,9 @@ This is the path a single `exec` takes, from argv to exit code.
  7. AGENT LOOKUP   has_agent(identity). Unknown → exit 3.
                    This precedes the confirmation gate.
                      │
- 8. CONFIRM GATE   Destructive verb without --yes and without a
-                   scripted "y" → exit 4. NOTHING IS SENT.
+ 8. CONFIRM GATE   Destructive verb (delete / shutdown / restart) without
+                   --yes and without a scripted "y" → exit 4.
+                   NOTHING IS SENT.
                      │
  9. DISPATCH       ConsoleSession::start(cmd) allocates a seq (from 1),
                    records a tracker, sends the CMD frame.
@@ -145,7 +154,11 @@ Two details worth internalising:
 
 - **The console never injects the `confirm` token.** The agent requires the
   literal string `confirm` as the first argument of a destructive command.
-  The console's own gate is separate and comes first. Both must be satisfied.
+  The console's own gate is separate and comes first, and it covers a
+  **narrower** set of verbs (`delete`, `shutdown`, `restart`) than the agent
+  gate does (`delete`, `move`, `copy`, `shutdown`, `restart`). For `move` and
+  `copy` only the agent gate applies — the console dispatches them and the
+  agent refuses them with `missing_confirmation`.
 - **Arguments are data, always.** They travel as an argv-style JSON array and
   are never re-joined into a shell line. `; | & > <` inside an argument are
   file names, not shell.
@@ -396,7 +409,7 @@ The token **never crosses the wire** and is never logged. See
 | Strict payload shapes | Unknown fields are rejected so silent version drift is impossible | `lib/protocol/payloads.cpp` |
 | Poisoning the stream on a framing violation | Alignment is unrecoverable; better a loud failure than a misread | `lib/protocol/envelope.cpp` |
 | Arguments as argv arrays | Never re-join into a shell line; metacharacters are file names | `lib/protocol/payloads.cpp`, `lib/syscalls/process.cpp` |
-| Two independent confirmation gates | The console refuses locally (nothing sent) *and* the agent refuses (nothing executed) | `console/cli.cpp`, `lib/syscalls/matrix.cpp` |
+| Two independent confirmation gates | The console refuses locally (nothing sent) for `delete`/`shutdown`/`restart`, *and* the agent refuses (nothing executed) for all five destructive verbs | `console/cli.cpp`, `lib/syscalls/matrix.cpp` |
 | A closed 19-verb command set | The refusal of an unknown verb is structured and auditable | `lib/syscalls/matrix.cpp` |
 | Capabilities behind interfaces + a shared job registry | Testable with fakes; one managed lifecycle for every background job | `lib/syscalls/*.hpp`, `lib/syscalls/jobs.hpp` |
 | `std::filesystem` for both OSes in the file family | One implementation, one set of error codes, cross-platform parity | `lib/syscalls/file.cpp` |

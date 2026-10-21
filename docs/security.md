@@ -125,15 +125,18 @@ is no pass-through, no "run this shell command", and no plugin mechanism.
 
 ### Two confirmation gates
 
-Destructive verbs (`delete`, `move`, `copy`, `shutdown`, `restart`) must pass
-both gates:
+Destructive verbs are marked destructive at the **agent** layer: `delete`,
+`move`, `copy`, `shutdown`, `restart`. The **console** gate covers a narrower
+set — `delete`, `shutdown`, `restart` only.
 
-| Gate | Where | What happens without it |
-| --- | --- | --- |
-| **A — console** | `console/cli.cpp` | The console refuses **locally**: nothing is sent to the agent, exit code 4. Without `--yes`, a non-TTY stdin refuses immediately; a TTY gets a `y/N` prompt on stderr that only accepts `y`/`yes`. |
-| **B — agent** | `lib/syscalls/matrix.cpp` | The agent refuses **before the capability runs**: `missing_confirmation`, nothing executed. The literal `confirm` token is stripped before the family sees the argv. |
+| Gate | Where | Verb set | What happens without it |
+| --- | --- | --- | --- |
+| **A — console** | `console/cli.cpp` (`kDestructiveCommands`) | `delete`, `shutdown`, `restart` | The console refuses **locally**: nothing is sent to the agent, exit code 4. Without `--yes`, a non-TTY stdin refuses immediately; a TTY gets a `y/N` prompt on stderr that only accepts `y`/`yes`. |
+| **B — agent** | `lib/syscalls/matrix.cpp` (`CommandSpec::destructive`) | all five | The agent refuses **before the capability runs**: `missing_confirmation`, nothing executed. The literal `confirm` token is stripped before the family sees the argv. |
 
-The gates are independent. The console does **not** inject `confirm`.
+The gates are independent. The console does **not** inject `confirm`. For
+`move` and `copy` only Gate B applies — the console dispatches them and the
+agent refuses them, so the command still cannot execute unconfirmed.
 
 ### Refusals are structured, not exceptions
 
@@ -219,9 +222,9 @@ These are real, and they are documented rather than hidden.
 | 4 | **No forward compatibility.** A new field on any control type breaks interop; a new envelope version poisons the stream. | A future peer cannot add fields without a coordinated upgrade. | Deliberate: silent version drift is worse than a loud failure. The `protocol_version` byte must equal 2 exactly. |
 | 5 | **The console does not authenticate the agent's operator.** Anyone who can reach the console's port and knows the token can drive the agent. | The token store and the network are the boundary. | Protect the token store (`0600`), restrict the listener, and audit. |
 | 6 | **The agent's console address is not verified.** The agent dials whatever it is configured to dial. | A hijacked config redirects the agent. | Protect the agent config file. |
-| 7 | **An oversized outbound result kills the session.** `encode_frame` throws `OversizePayload` for a > 1 MiB `RESULT_TEXT`, and that propagates out of the delivery path. | One oversized result ends an otherwise healthy session. | The agent shapes results into 128 KiB chunks, so this only bites on a pathological text result. |
+| 7 | **An oversized outbound result kills the session.** `encode_frame` throws `OversizePayload` for a > 1 MiB `RESULT_TEXT`, and that propagates out of the delivery path. | One oversized result ends an otherwise healthy session. | The shipped agent shapes anything over 128 KiB into the chunked file channel, so the oversize path is unreachable through the agent today. |
 | 8 | **`ConsoleSession::opened_at_` is never assigned.** The console's auth timeout is measured from time 0. | With an absolute clock the auth timeout would fire on the first pump. | The shipped TCP transport rebases the session clock per connection (accept = 0), which masks it. |
-| 9 | **The keyboard lock does not survive the session on Linux.** The X grab dies with the display connection. | The lock's scope is the agent's session — by design, and a safety property. | `unlock_keyboard` releases it explicitly; the connection closing releases it implicitly. |
+| 9 | **The keyboard lock's scope is the X display connection, not the session.** The Linux guard holds the display open while locked, and the `InputControl` is created once for the agent's whole process — so the grab survives session drops and redials. | The lock outlives the session it was taken in. | `unlock_keyboard` releases it explicitly. The grab dies with the display connection — or with the agent process. |
 | 10 | **The Gmail adapter's admin list is the only mail-side authorisation.** | A compromised admin address can issue commands. | Keep the admin list short, rotate the OAuth credentials, and read the audit trail. |
 
 ---
@@ -257,9 +260,9 @@ Summary of the last verification (2026-10-21):
 | Search | Result |
 | --- | --- |
 | Retired v1 admin addresses | **None** in the tracked tree (they survive only in git history, behind the `v1.0-final` tag). |
-| `admin.txt` | Only in prose inside `openspec/**` describing its retirement. |
+| `admin.txt` | No such **file** exists. The literal appears only in prose: inside `openspec/**` describing its retirement, and inside this documentation set and `docs/readiness-decisions.md` quoting the record. |
 | Credential-shaped strings | Only OAuth *field names* and fabricated test values. Real credentials live at operator-configured paths outside the repo. |
-| Hardcoded port `12345` | Only a historical comment noting that v2 replaced it. The agent's default dial port 47474 is a config-file default, not source wiring. |
+| Hardcoded port `12345` | Not hardcoded in source. The literal appears only in prose: `openspec/changes/tether-v2-reset/design.md` and `docs/readiness-decisions.md`, describing v1's retired port. The agent's default dial port 47474 is a config-file default, not source wiring. |
 | High-entropy literals | The RFC 4231 HMAC vector, the base64 alphabets, and fabricated test tokens — no secrets. |
 
 **Any tree change that reintroduces a literal address or a secret is a policy

@@ -119,22 +119,28 @@ case-sensitive** — `List` is outside the set and is refused with
 | `delete` | file | ✔ | 1 | `deleted <path>` |
 | `move` | file | ✔ | 2 | `moved <src> -> <dst>` |
 | `copy` | file | ✔ | 2 | `copied <src> -> <dst>` |
-| `shutdown` | power | ✔ | 0 | `shutdown initiated` |
-| `restart` | power | ✔ | 0 | `restart initiated` |
+| `shutdown` | power | ✔ | 0 | `shutdown initiated` (+ `the operating system owns the transition from here`) |
+| `restart` | power | ✔ | 0 | `restart initiated` (+ `the operating system owns the transition from here`) |
 | `screenshot` | capture | — | 0 | `captured the screen as screenshot.png` **+ a PNG file result** |
-| `start_webcam` | camera | — | 0 | `camera job started` |
+| `start_webcam` | camera | — | 0 | `camera job started` (+ `the capture runs in the background; …`) |
 | `stop_webcam` | camera | — | 0 | `camera job stopped; delivered webcam.png` **+ a PNG file result** |
-| `start_keylogger` | input | — | 0–1 | `keylogger job started` |
+| `start_keylogger` | input | — | 0–1 | `keylogger job started` (+ the storage line and the job-event JSON) |
 | `stop_keylogger` | input | — | 0 | `keylogger job stopped; delivered <name>` **+ a capture file result** |
-| `lock_keyboard` | input | — | 0 | `keyboard locked` |
+| `lock_keyboard` | input | — | 0 | `keyboard locked` (+ `unlock_keyboard releases the lock`) |
 | `unlock_keyboard` | input | — | 0 | `keyboard unlocked` |
 | `list_app` | app | — | 0 | One `<name> <path>` line per entry |
 | `start_app` | app | — | 1 | `started pid <pid>` |
 | `stop_app` | app | — | 1 | Same as `stop` |
 
-Every command is supported on **both** Windows and Linux. Platform gaps (for
-example the input family on a Wayland-only host) surface at runtime as a
-structured `unsupported_platform` refusal, not as a missing matrix row.
+The "Success output" column lists the **primary** line. Several commands
+append a second explanatory line (shown in parentheses); the parenthesised
+lines are part of stdout, so a script that parses stdout should expect them.
+
+Every command is supported on **both** Windows and Linux. Platform gaps are not
+expressed as matrix rows; they surface at runtime as a structured refusal from
+inside the family — `unsupported_platform` for the input family on a
+Wayland-only host, `execute_failed` for the capture family with no reachable
+X server (see the capture family below).
 
 ---
 
@@ -197,15 +203,17 @@ beta/
 
 **`delete <path>`** — exactly one argument. Removes a file or a **single empty
 directory**. Recursive tree deletion is deliberately not offered.
-- Refusals: `not_found`, `directory_not_empty`, `access_denied`.
+- Refusals: `not_found`, `directory_not_empty`, `access_denied`,
+  `already_exists`, `execute_failed`.
 
 **`move <src> <dst>`** — exactly two arguments. Replaces an existing
 destination (POSIX `rename` semantics).
-- Refusals: `not_found`, `cross_device`.
+- Refusals: `not_found`, `cross_device`, `access_denied`, `already_exists`,
+  `execute_failed`.
 
 **`copy <src> <dst>`** — exactly two arguments. Overwrites the destination and
 recurses into directories.
-- Refusals: `not_found`.
+- Refusals: `not_found`, `access_denied`, `already_exists`, `execute_failed`.
 
 ### Power family
 
@@ -242,8 +250,11 @@ token.
   composited roots (XWayland, WSLg).
 - An X error handler that swallows errors is installed first — without it,
   Xlib's default handler *prints and terminates the process*.
-- Refusals: `execute_failed` (no display reachable, grab failed),
-  `unsupported_platform` (Wayland, no capture parity).
+- Refusals: `execute_failed` — no display reachable
+  (`no X display is reachable (is DISPLAY set?): the capture family is X11 on
+  Linux; Wayland has no capture parity here`) or the grab failed. The capture
+  family does **not** emit `unsupported_platform`; that code belongs to the
+  dispatcher (a matrix or family-slot gap) and to the input family.
 
 See [capture-notes.md](capture-notes.md) for the benchmark behind the
 own-library X11 decision.
@@ -335,7 +346,18 @@ delivered as an honest **zero-byte** file, not as an error.
 
 ## 4. The two confirmation gates
 
-Destructive verbs are `delete`, `move`, `copy`, `shutdown`, `restart`.
+There are **two independent gates**, and they cover **different verb sets**.
+
+| Gate | Where | Verb set |
+| --- | --- | --- |
+| **A — console side** | `console/cli.cpp` (`kDestructiveCommands`) | `delete`, `shutdown`, `restart` |
+| **B — agent side** | `lib/syscalls/matrix.cpp` (`CommandSpec::destructive`) | `delete`, `move`, `copy`, `shutdown`, `restart` |
+
+**The agent gate is the wider one.** `move` and `copy` are marked destructive
+in the capability matrix (they replace their destination), but they are **not**
+in the console's `kDestructiveCommands` list — so the console dispatches them
+without prompting, and the *agent* refuses them with `missing_confirmation`
+(exit code 1, not 4).
 
 ```
   operator          console                         agent
@@ -343,12 +365,15 @@ Destructive verbs are `delete`, `move`, `copy`, `shutdown`, `restart`.
      │ exec lab-1     │                               │
      │ delete /tmp/x  │                               │
      │────────────────▶│                               │
-     │                │ GATE A: --yes or an           │
-     │                │ interactive y?                 │
+     │                │ GATE A (delete / shutdown /    │
+     │                │   restart only):              │
+     │                │   --yes, or an interactive y?  │
      │                │   no  → exit 4, nothing sent  │
-     │                │   yes → strip nothing, forward │
+     │                │   yes → forward               │
      │                │──────────── CMD ──────────────▶│
-     │                │                               │ GATE B: args[0]
+     │                │                               │ GATE B (delete / move /
+     │                │                               │   copy / shutdown /
+     │                │                               │   restart): args[0]
      │                │                               │   == "confirm"?
      │                │                               │   no  → missing_
      │                │                               │         confirmation
@@ -367,6 +392,9 @@ Destructive verbs are `delete`, `move`, `copy`, `shutdown`, `restart`.
 - A refusal is `error: refusal: '<cmd>' on '<agent>' is destructive and was not
   confirmed (nothing was sent)` with **exit code 4**. **Nothing is sent to the
   agent.**
+- A literal `--yes` among the command arguments is consumed by the exec
+  parser and **sets the confirmation flag** — it cannot be passed through to
+  the agent as data.
 
 **Gate B (agent side)** — `lib/syscalls/matrix.cpp`:
 
@@ -383,6 +411,13 @@ The console does **not** inject `confirm`. Both gates must be satisfied:
 $ tether-console exec lab-1 delete confirm /tmp/scratch.txt --yes
 ```
 
+For `move` and `copy` only Gate B applies — but the literal `confirm` token is
+still required:
+
+```console
+$ tether-console exec lab-1 move confirm /a /b
+```
+
 ---
 
 ## 5. Refusal codes
@@ -393,11 +428,12 @@ machine-readable; the message is human detail.
 | Code | Raised by | Meaning |
 | --- | --- | --- |
 | `unknown_command` | The dispatcher | The verb is outside the closed set. |
-| `unsupported_platform` | The dispatcher / a family | The capability is not available on this platform or in this environment. |
+| `unsupported_platform` | The dispatcher / the input family | The capability is not available on this platform, in this build, or in this environment. |
 | `missing_confirmation` | The dispatcher | A destructive command without the `confirm` token. |
 | `invalid_args` | A family | The argument shape is wrong (arity, type). |
 | `not_found` | A family | The target does not exist. |
 | `access_denied` | A family | The OS refused the operation (permissions, privileges). |
+| `already_exists` | The file family | The destination path already exists. |
 | `already_running` | A family | A background job or a lock is already engaged. |
 | `not_running` | A family | Nothing to stop or release. |
 | `directory_not_empty` | The file family | Recursive deletion is not offered. |
@@ -405,9 +441,16 @@ machine-readable; the message is human detail.
 | `execute_failed` | A family | The operation failed for a reason with no better classification. |
 | `internal_error` | The dispatcher | An unexpected exception escaped a family. |
 
-At the protocol layer there are three more codes that the protocol itself
-defines: `auth_failed` (handshake failure), `cancelled` (the cancel ack), and
-`no_handler` (the agent has no handler for that command).
+The refusal vocabulary is declared in `lib/syscalls/matrix.hpp` and
+`lib/syscalls/errors.hpp`. The lists under §3 are the common cases, not
+exhaustive — every file operation can also raise `access_denied`,
+`already_exists`, or `execute_failed`.
+
+At the protocol layer there are four more codes that the protocol itself
+defines: `auth_failed` (handshake failure), `cancelled` (the cancel ack),
+`no_handler` (the agent has no handler for that command), and `timeout` (a
+console-side command deadline — it is **not** sent on the wire; it surfaces
+locally as the `error_code` on the command's record).
 
 ### Which failures are "refusals" in the audit trail
 
@@ -430,7 +473,7 @@ A command's result is a **stream of pieces** on the command's seq.
 | --- | :---: | --- |
 | `RESULT_TEXT` | yes | The whole text result. `text` must be non-empty. |
 | `FILE_META` | no | `{"name": "...", "size": N}` — the file name and its total byte count. |
-| `FILE_CHUNK` | no | Raw bytes (never JSON), ≤ 256 KiB each. |
+| `FILE_CHUNK` | no | Raw bytes (never JSON). The protocol cap is 256 KiB; the shipped agent emits **128 KiB** chunks. |
 | `FILE_END` | yes | The last chunk has arrived. |
 | `ERR` | yes | The command failed. |
 

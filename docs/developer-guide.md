@@ -29,24 +29,26 @@ recipes for the changes you are most likely to make.
 │   ├── protocol/               envelope, payloads, handshake, session, bytes
 │   ├── transport/              transport interface, tcp, gmail
 │   └── syscalls/               the matrix, the 7 families, the job registry
-├── tests/                      28 doctest suites + 2 helper executables
+├── tests/                      27 doctest suites + 2 helper executables
 ├── docs/                       this documentation set
 ├── scripts/                    the narrated demo
 ├── openspec/                   the change history: proposals, specs, design, tasks
 └── .github/workflows/ci.yml    the two-leg CI
 ```
 
-### Line counts by area (approximate)
+### Line counts by area
 
-| Area | Files | Rough size |
+| Area | Source files | Rough size |
 | --- | ---: | ---: |
-| `lib/protocol` | 9 | ~2,000 lines |
-| `lib/syscalls` | 19 | ~4,500 lines |
-| `lib/transport` | 8 | ~2,400 lines |
-| `lib/common` | 7 | ~700 lines |
+| `lib/protocol` | 10 | ~2,000 lines |
+| `lib/syscalls` | 21 | ~4,500 lines |
+| `lib/transport` | 7 | ~2,400 lines |
+| `lib/common` | 6 | ~700 lines |
 | `console` | 7 | ~1,900 lines |
-| `agent` | 4 | ~450 lines |
-| `tests` | 31 | ~9,000 lines |
+| `agent` | 3 | ~450 lines |
+| `tests` | 29 | ~9,000 lines |
+
+(File counts exclude each area's `CMakeLists.txt`.)
 
 ---
 
@@ -104,7 +106,7 @@ the `raw` upload).
 
 | File | What it holds |
 | --- | --- |
-| `cli.hpp/.cpp` | `CliStreams`, `IOperConsole`, `ExitCode` constants, `run_cli`. |
+| `cli.hpp/.cpp` | `CliStreams`, `IOperConsole`, the `kExit*` exit-code constants, `run_cli`. |
 | `tcp_console.hpp/.cpp` | `TcpOperConsole` — the pump loop, `wait_for_dial`, the agent-dial budget. |
 | `audit.hpp/.cpp` | `AuditRecord`, `AuditQuery`, `AuditStore`, `load_audit_jsonl`, `classify_command_outcome`, `parse_job_event_line`. |
 
@@ -126,11 +128,20 @@ assume them.
 
 - Namespaces mirror directories: `tether::common`, `tether::protocol`,
   `tether::transport`, `tether::syscalls`, `tether::cli`, `tether::agent`.
-- Libraries are `tether-<area>`; the CMake target `tether-syscalls` becomes
-  `tether::syscalls`.
-- Factories are `make_<thing>()` and return `std::shared_ptr<I<Thing>>`.
-- Interfaces are `I<Thing>`; the concrete implementations are named after
-  their platform (`WindowsProcessControl`, `LinuxProcessControl`).
+  (The C++ namespace comes from the source files; there are no CMake `ALIAS`
+  targets — the build target is `tether-syscalls`, the namespace is
+  `tether::syscalls`.)
+- CMake targets are `tether-<area>`: `tether-common`, `tether-protocol`,
+  `tether-transport`, `tether-syscalls`, `tether-cli`,
+  `tether-command-handler`.
+- Factories are `make_<thing>()`. The syscall families return
+  `std::shared_ptr<I<Thing>>`; the transport layer returns `std::unique_ptr`
+  (`make_curl_http_client`, `make_google_gmail_client`).
+- Interfaces are `I<Thing>`; the concrete implementations are often named
+  after their platform (`WindowsProcessControl`, `LinuxProcessControl`,
+  `WindowsShortcutsAppLauncher`, `DesktopEntriesAppLauncher`,
+  `WinGdiScreenCapture`, `X11ScreenCapture`), and sometimes after their
+  mechanism (`FilesystemControl`, `VideoCaptureSource`, `SdBusLogindBinding`).
 - Free functions that belong to a family live in that family's translation
   unit.
 
@@ -151,7 +162,7 @@ Follow that pattern. It is the project's main design record.
 
 ### Errors
 
-There are **five** error types, and each is used for exactly one layer:
+There are **seven** error types, and each is used for exactly one layer:
 
 | Exception | Layer | Header |
 | --- | --- | --- |
@@ -161,6 +172,7 @@ There are **five** error types, and each is used for exactly one layer:
 | `TransportError` | The pipe | `lib/transport/transport.hpp` |
 | `SyscallError` | A capability | `lib/syscalls/errors.hpp` |
 | `AuditStoreError` | The audit trail | `console/audit.hpp` |
+| `CliSetupError` | Console construction | `console/cli.hpp` |
 
 Rules:
 
@@ -168,9 +180,14 @@ Rules:
   own type, and the message should name the thing that failed.
 - A refusal that crosses the wire becomes an `Outcome` with a stable
   `code`, never an exception. Exceptions are for *unexpected* failures; the
-  five refusal codes in the taxonomy are *expected* outcomes.
+  refusal codes in the taxonomy (see
+  [command-reference.md §5](command-reference.md#5-refusal-codes)) are
+  *expected* outcomes.
 - Every message should name what failed and why, in prose a human can act on.
   "the family is not implemented in this build yet" beats "not supported".
+- `SessionError` is the one type that is *not* caught by the agent's main
+  loop — an agent that hits one terminates abnormally rather than exiting
+  cleanly. Handle it explicitly if you introduce a new path that can raise it.
 
 ### Comments
 
@@ -207,15 +224,18 @@ constraint, or a trap is load-bearing. Examples from the tree:
 
 ### Time
 
-**Never call `std::chrono::system_clock::now()` or sleep in a protocol or
-transport path.** Time is injected:
+**Never call `std::chrono::system_clock::now()` in a protocol or transport
+path.** Time is injected:
 
 - The protocol takes `SessionMillis now` on every `pump()`/`start()`.
 - The transport takes `TransportMillis now` on every `pump()`/`issue()`.
 - `monotonic_now_ms()` (`lib/transport/transport.cpp`) is the production
   source of `TransportMillis`.
 
-This is what makes the whole test suite deterministic and sleep-free.
+This is what makes the whole test suite deterministic and sleep-free. The
+protocol layer contains **no sleeps at all**. The transport layer sleeps in
+exactly two places, both outside the pump: the dial-out backoff
+(`establish_with_retries`) and the console's 2 ms poll interval.
 
 ### Warnings
 
@@ -254,8 +274,10 @@ automatically.
 
 **Step 2 — wire the family slot** (if it is a new family): add the interface
 in `lib/syscalls/<family>.hpp`, the implementation in
-`lib/syscalls/<family>.cpp`, a `set_<family>_control` setter on
-`CommandDispatcher`, and a `family_available` branch.
+`lib/syscalls/<family>.cpp`, a setter on `CommandDispatcher` (the existing
+ones are `set_process_control`, `set_file_system`, `set_power_control`,
+`set_screen_capture`, `set_camera_capture`, `set_input_control`,
+`set_app_launcher`), and a `family_available` branch.
 
 **Step 3 — implement the dispatch arm** (`lib/syscalls/matrix.cpp`,
 `CommandDispatcher::dispatch`): validate the arity, call the family, and shape
@@ -322,10 +344,10 @@ consistently, and it is why the suite is green on both legs.
 
 ### 4.4 Add a console verb
 
-1. `console/cli.hpp` — add the verb to the known-verbs list and, if needed, a
-   new `IOperConsole` method.
-2. `console/cli.cpp` — parse it, implement the run function, and map the
-   outcome to an exit code.
+1. `console/cli.cpp` — add the verb to `kKnownVerbs`, parse it, implement the
+   run function, and map the outcome to an exit code.
+2. `console/cli.hpp` — add the verb to the `IOperConsole` interface if it
+   needs a new operation.
 3. `console/tcp_console.hpp/.cpp` — implement the new `IOperConsole` method.
 4. `tests/cli_verb_test.cpp` — add the cases.
 
@@ -369,7 +391,7 @@ The authoritative requirement set is in `openspec/changes/tether-v2-reset/`:
 | File | Contents |
 | --- | --- |
 | `proposal.md` | Why the v2 reset happened and what it replaced. |
-| `design.md` | The design decisions, including the numbered "D" decisions the code comments cite (`D1`…`D8`). |
+| `design.md` | The design decisions, including the numbered "D" decisions the code comments cite (`D1`…`D9`). |
 | `tasks.md` | The phase-by-phase task list with completion status. |
 | `specs/secure-session/spec.md` | Authentication, identity registration, seq correlation, session survival. |
 | `specs/command-transport/spec.md` | The transport interface, the TCP transport, the Gmail adapter, transport equivalence. |
@@ -396,8 +418,10 @@ The loop:
 4. **Verify** — check the implementation against the artifacts.
 5. **Archive** — move the change into `openspec/changes/archive/`.
 
-The `openspec-*-change` skills drive these steps. The archived history in
-`openspec/changes/archive/` shows the shape of a finished change.
+The `openspec-*-change` skills drive these steps. The `openspec/changes/archive/`
+directory is where a finished change is moved to; it currently holds only a
+`.gitkeep`, so `openspec/changes/tether-v2-reset/` is the one worked example
+of a change's shape.
 
 ---
 
@@ -411,7 +435,7 @@ The `openspec-*-change` skills drive these steps. The archived history in
 | A command is refused unexpectedly | `lib/syscalls/matrix.cpp` (`CommandDispatcher::dispatch` — the five gates) |
 | A command's arguments arrive mangled | `lib/syscalls/process.cpp` (`append_quoted_argument` on Windows) |
 | The output file is truncated | `agent/command_handler.cpp` (`outcome_to_pieces`, the 128 KiB chunking) |
-| The exit code is unexpected | `console/cli.cpp` (`run_cli`, the `ExitCode` constants) |
+| The exit code is unexpected | `console/cli.cpp` (`run_cli`, the `kExit*` constants) |
 | The audit trail is missing a record | `console/audit.cpp` (`AuditStore::append`) and `console/cli.cpp` (the record builders) |
 | A Linux command needs root or a session | `lib/syscalls/power.cpp` (the logind binding) |
 | A screenshot fails on Linux | `lib/syscalls/capture.cpp` and [capture-notes.md](capture-notes.md) |
