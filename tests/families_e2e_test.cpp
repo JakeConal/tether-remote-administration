@@ -584,12 +584,35 @@ struct Habitat {
         agent = make_agent();
         e2e_step("habitat: agent link connected; wiring the dispatcher");
         wire_dispatcher(wiring);
-        e2e_step("habitat: dispatcher wired; writing console config");
+        e2e_step("habitat: dispatcher wired; starting the agent event-loop thread");
+        // The agent half runs its own event loop on its own thread - the
+        // production topology (agent process with an independent loop). A
+        // large agent-side send (a real screenshot exceeds the loopback
+        // kernel send buffer on Windows) must never starve the console's
+        // reads the way a single shared test thread did.
+        agent_pump_run.store(true);
+        agent_pump_worker = std::thread([this] {
+            agent->begin_handshake(tt::monotonic_now_ms());
+            while (agent_pump_run.load(std::memory_order_relaxed)) {
+                agent->pump(tt::monotonic_now_ms());
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        });
+        e2e_step("habitat: writing console config");
         write_console_config();
         e2e_step("habitat: console config written; building app fixtures");
         build_app_fixtures(apps);
         e2e_trace("habitat up, console port " +
                   std::to_string(console.listening_port()));
+    }
+
+    ~Habitat() {
+        // Wind the agent event-loop thread down BEFORE any member unwinds
+        // (the link and the registry must both outlive it).
+        if (agent_pump_worker.joinable()) {
+            agent_pump_run.store(false);
+            agent_pump_worker.join();
+        }
     }
 
 private:
@@ -688,22 +711,19 @@ public:
     }
 };
 
-// Drives both stack halves until the handshake completes (the loopback
-// pattern: sockets are real so the wait is deadline-bounds with tiny sleeps).
+// The agent thread runs its own handshake (HELLO -> challenge -> answer);
+// the main thread only drives the console half and watches the console
+// session reach Established (implied by the agent's completed answer).
 bool established_handshake(Habitat& habitat, tt::TransportMillis budget_ms = 1500) {
-    habitat.agent->begin_handshake(tt::monotonic_now_ms());
     const tt::TransportMillis deadline = tt::monotonic_now_ms() + budget_ms;
     for (;;) {
-        const tt::TransportMillis now = tt::monotonic_now_ms();
-        habitat.console.pump(now);
-        habitat.agent->pump(now);
+        habitat.console.pump(tt::monotonic_now_ms());
         const auto session = habitat.console.session_for(kAgentIdentity);
-        if (habitat.agent->established() && session &&
-            session->state() == tp::SessionState::Established) {
+        if (session && session->state() == tp::SessionState::Established) {
             e2e_step("handshake established");
             return true;
         }
-        if (now >= deadline) {
+        if (tt::monotonic_now_ms() >= deadline) {
             e2e_step("handshake NOT established within budget");
             return false;
         }
@@ -711,31 +731,29 @@ bool established_handshake(Habitat& habitat, tt::TransportMillis budget_ms = 150
     }
 }
 
-// Keeps both halves pumping between CLI calls (keepalive cadence).
-void pump_both_until(Habitat& habitat, tt::TransportMillis budget_ms) {
+// Pumps the console half only: the agent half pumps itself on its own thread
+// (the production topology), and the link must never be touched from here.
+void pump_console_until(Habitat& habitat, tt::TransportMillis budget_ms) {
     const tt::TransportMillis deadline = tt::monotonic_now_ms() + budget_ms;
     while (tt::monotonic_now_ms() < deadline) {
-        const tt::TransportMillis now = tt::monotonic_now_ms();
-        habitat.console.pump(now);
-        habitat.agent->pump(now);
+        habitat.console.pump(tt::monotonic_now_ms());
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 }
 
-// poll with the stack kept alive: long-ish waits (child start/end) sit
-// BETWEEN CLI calls, so both halves keep pumping the whole time.
+// poll with the console kept alive: long-ish waits (child start/end) sit
+// BETWEEN CLI calls, so the console half keeps pumping the whole time while
+// the agent thread serves the work in parallel.
 bool poll_with_pump(Habitat& habitat, const std::function<bool()>& condition, int budget_ms) {
     e2e_step("poll begin (budget " + std::to_string(budget_ms) + " ms)");
     const tt::TransportMillis deadline = tt::monotonic_now_ms() + budget_ms;
     for (;;) {
-        const tt::TransportMillis now = tt::monotonic_now_ms();
-        habitat.console.pump(now);
-        habitat.agent->pump(now);
+        habitat.console.pump(tt::monotonic_now_ms());
         if (condition()) {
             e2e_step("poll ok");
             return true;
         }
-        if (now >= deadline) {
+        if (tt::monotonic_now_ms() >= deadline) {
             e2e_step("poll EXPIRED (condition never became true)");
             return false;
         }
@@ -767,8 +785,9 @@ RunResult run_verb(Habitat& habitat, const std::vector<std::string>& tail,
         habitat.cli_argv(tail), tcli::CliStreams{out, err, in, false, stdin_tty},
         [&habitat](const std::string&) -> std::unique_ptr<tcli::IOperConsole> {
             return std::unique_ptr<tcli::IOperConsole>(
-                new tcli::TcpOperConsole(habitat.console, tt::monotonic_now_ms,
-                                         [&habitat] { habitat.agent->pump(tt::monotonic_now_ms()); }));
+                // The side pump is a no-op: the agent half pumps itself on
+                // its own thread and the link must not be touched here.
+                new tcli::TcpOperConsole(habitat.console, tt::monotonic_now_ms, [] {}));
         },
         habitat.audit_factory());
     result.out = out.str();
@@ -867,7 +886,7 @@ TEST_CASE("process family over the CLI: list then a benign start and stop of a r
     RunResult served = run_verb(habitat, {"exec", kAgentIdentity, "list"});
     CHECK(served.exit_code == tcli::kExitOk);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // file (real std::filesystem): list + the confirmed write path in a temp dir +
@@ -938,7 +957,7 @@ TEST_CASE("file family over the CLI: list, confirmed delete removes the file, un
     CHECK(after.out.find("victim") == std::string::npos);
     CHECK(after.out.find("keeper.txt") != std::string::npos);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // power: REFUSAL PATHS ONLY - never a real shutdown/restart on this machine.
@@ -974,7 +993,7 @@ TEST_CASE("power family over the CLI: refusals only, nothing ever reaches a powe
     RunResult served = run_verb(habitat, {"exec", kAgentIdentity, "list"});
     CHECK(served.exit_code == tcli::kExitOk);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // capture: the fake source's screenshot rides the file channel byte-exact
@@ -1006,7 +1025,7 @@ TEST_CASE("capture family over the CLI: the fake capture delivers byte-exact ove
     REQUIRE(records.size() == 1);
     CHECK(records.front().record_type == "command");
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 TEST_CASE("capture family on the platform in use: the REAL per-OS grab produces a decodable image") {
@@ -1038,7 +1057,7 @@ TEST_CASE("capture family on the platform in use: the REAL per-OS grab produces 
         CHECK(served.exit_code == tcli::kExitOk);
     }
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // camera: the managed background job over the fake device - start, the
@@ -1090,7 +1109,7 @@ TEST_CASE("camera family over the CLI: start, duplicate-refuse, stop-and-deliver
     RunResult still_serving = run_verb(habitat, {"exec", kAgentIdentity, "list"});
     CHECK(still_serving.exit_code == tcli::kExitOk);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // input: the keylogger job through the REAL file sink into a temp storage,
@@ -1138,7 +1157,7 @@ TEST_CASE("input family over the CLI: keylogger job start/stop with temp storage
     RunResult follow_up = run_verb(habitat, {"exec", kAgentIdentity, "list"});
     CHECK(follow_up.exit_code == tcli::kExitOk);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 TEST_CASE("input family over the CLI: a Wayland environment refuses structurally and never wedges") {
@@ -1174,7 +1193,7 @@ TEST_CASE("input family over the CLI: a Wayland environment refuses structurally
     REQUIRE(served.exit_code == tcli::kExitOk);
     CHECK(served.err.empty());
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // app: real per-OS store fixtures - list, a craft-launch observed verbatim,
@@ -1241,7 +1260,7 @@ TEST_CASE("app family over the CLI: list, craft-launch of a probe child, stop") 
     RunResult follow_up = run_verb(habitat, {"exec", kAgentIdentity, "list_app"});
     CHECK(follow_up.exit_code == tcli::kExitOk);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
 
 // audit: THE E2E RUN's trail - executed / refused / failed command records
@@ -1281,7 +1300,7 @@ TEST_CASE("the gauntlet leaves an audit trail spanning executed, refused, failed
     REQUIRE(poll_with_pump(habitat, [&] { return habitat.keys->delivered_lines() >= 1; }, 2000));
     CHECK(run_verb(habitat, {"exec", kAgentIdentity, "stop_keylogger"}).exit_code == tcli::kExitOk);
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 
     // The persisted JSONL: the strict loader re-parses every line (all fields
     // present with the right types), and the classes span the run.
@@ -1390,5 +1409,5 @@ TEST_CASE("an unknown command over the CLI is refused harmlessly and the session
     REQUIRE(served.exit_code == tcli::kExitOk);
     CHECK(served.err.empty());
 
-    pump_both_until(habitat, 40);
+    pump_console_until(habitat, 40);
 }
