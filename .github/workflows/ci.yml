@@ -6,18 +6,52 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: this CI publishes no packages or releases, so it only
+# needs to read code and manage artifacts of its own runs.
+permissions:
+  contents: read
+
+# A new push to the same branch/PR cancels the queued or in-progress run,
+# so fixes pushed in quick succession don't queue behind each other.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    # Outer backstop on top of the per-test ctest TIMEOUTs
+    # (tests/CMakeLists.txt): one leg has already hung for ~1 h when a runner
+    # environment silently broke, so a wedged run must die loudly at 60 min
+    # instead of parking a runner for hours with unobservable state.
+    timeout-minutes: 60
+
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
-
-    runs-on: ${{ matrix.os }}
+        include:
+          - os: ubuntu-latest
+            # 4-vCPU runner; one shared xvfb display serves all suites and
+            # every suite is X-safe by design (task 6.5), so full parallelism.
+            ctest_jobs: 4
+            compiler_cache_launcher: "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          - os: windows-latest
+            # Conservative: the e2e composition has wedged on windows-latest
+            # before (tests/CMakeLists.txt), so 2-way only. Also no ccache:
+            # CMAKE_CXX_COMPILER_LAUNCHER is ignored by the Visual Studio
+            # generator, and switching to Ninja is not worth the risk yet.
+            ctest_jobs: 2
+            compiler_cache_launcher: ""
 
     env:
       BUILD_TYPE: Release
+      # ccache invocation settings for the Linux leg (harmless on Windows,
+      # where no ccache is wired in). The cache directory is pinned so the
+      # workflow does not depend on per-OS default locations.
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 5G
 
     steps:
       - uses: actions/checkout@v4
@@ -25,29 +59,97 @@ jobs:
       # Task 6.5: the Linux capture family grabs the screen through X11, so
       # the test leg needs the dev headers (libx11-dev) at configure/build
       # and an X server (xvfb-run) at test time for the "produced screenshot
-      # is a decodable image" scenario.
-      - name: Install X11 headers and xvfb (Linux leg)
+      # is a decodable image" scenario. ccache is made an EXPLICIT dependency
+      # of the Linux leg instead of relying on the runner image carrying it.
+      - name: Install X11 headers, xvfb and ccache (Linux leg)
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev xvfb
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libx11-dev xvfb ccache
+
+      # --- cache layer 1: compiled translation units of THIS repo (Linux) ---
+      #
+      # Compiler cache for the project's own sources. Dependencies are
+      # handled by the vcpkg binary cache below; ccache covers the built
+      # libraries/tests, so between-run runs recompile only what changed.
+      # (Windows only with the Ninja generator or an MSBuild wrapper task -
+      # see the matrix comment - so the cache scope is Linux-only for now.)
+      - name: Restore compiler cache
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          # run_id makes the key unique per run, so every run closes with a
+          # cleaned, self-contained snapshot; restore-keys hands back the
+          # most recent previous snapshot for incremental reuse.
+          key: ccache-${{ matrix.os }}-${{ github.run_id }}
+          restore-keys: ccache-${{ matrix.os }}-
+
+      # --- cache layer 2: compiled vcpkg dependencies ---
+      #
+      # vcpkg in manifest mode compiles the whole dependency graph from
+      # source on each run (opencv4 alone is ~15-25 min on these runners).
+      # The binary cache stores content-addressed prebuilt packages on the
+      # first run and restores them in seconds afterwards: archive filenames
+      # embed each package's ABI hash, so restore-keys may hand back a stale
+      # snapshot and vcpkg can still only reuse exactly the builds that match
+      # the current manifest - a changed manifest rebuilds only what changed.
+      - name: Prepare vcpkg binary cache directory
+        shell: bash
+        run: mkdir -p vcpkg-bincache
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-${{ matrix.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-bin-${{ matrix.os }}-
 
       # Both runner families ship vcpkg preinstalled at VCPKG_INSTALLATION_ROOT.
       - name: Configure (vcpkg manifest mode)
         shell: bash
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=$BUILD_TYPE
           -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          ${{ matrix.compiler_cache_launcher }}
 
       - name: Build
         shell: bash
         run: cmake --build build --config $BUILD_TYPE --parallel
 
+      # Per-test ctest TIMEOUTs (tests/CMakeLists.txt) bound each suite; the
+      # run itself is parallelized with per-leg knobs from the matrix.
+      # --output-junit (absolute path: relative semantics changed across
+      # ctest versions) gives machine-readable results for the artifact below.
       - name: Test
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a ctest --test-dir build --output-on-failure -C $BUILD_TYPE
+            xvfb-run -a ctest --test-dir build --output-on-failure -C $BUILD_TYPE \
+              --parallel ${{ matrix.ctest_jobs }} \
+              --output-junit "${{ github.workspace }}/test-results.xml"
           else
-            ctest --test-dir build --output-on-failure -C $BUILD_TYPE
+            ctest --test-dir build --output-on-failure -C $BUILD_TYPE \
+              --parallel ${{ matrix.ctest_jobs }} \
+              --output-junit "${{ github.workspace }}/test-results.xml"
           fi
+
+      - name: Upload test results (JUnit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: test-results.xml
+          if-no-files-found: warn
+
+      # Observability + hygiene: print per-run cache statistics and evict
+      # stale entries BEFORE the cache action's post-save compresses the
+      # snapshot, keeping the archived cache small.
+      - name: Compiler cache statistics (Linux leg)
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          ccache --cleanup
+          ccache --show-stats
