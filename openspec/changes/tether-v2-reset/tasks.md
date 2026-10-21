@@ -53,7 +53,7 @@ Scope note (not tracked): the umbrella design's per-phase-change flow (D9) was c
 - [x] 6.7 Implement the input family (keylogger start/stop with configurable capture storage, keyboard lock/unlock): Windows paths first, Linux X11 implementations, Wayland environments resolving to structured unsupported results; verify tests that unsupported resolution never wedges the session and job lifecycle tests apply to the keylogger
 - [x] 6.8 Implement the app family (list/start/stop): Start-menu `.lnk` resolution via the shell API on Windows, `.desktop` entries on Linux; verify list/start/stop behavior tests on the platform in use
 - [x] 6.9 Implement console-side audit records (time, agent identity, command, parameters, seq, outcome) with query/fixture access; verify tests per the audit requirement spanning executed, refused, and failed commands and background-job events
-- [ ] 6.10 Extend the end-to-end suite with scenario checks for each command family on the platform in use (exec via CLI over TCP, background job start/stop with delivered capture, refusal paths); verify the whole CTest suite green and both-OS parity visible in CI logs
+- [x] 6.10 Extend the end-to-end suite with scenario checks for each command family on the platform in use (exec via CLI over TCP, background job start/stop with delivered capture, refusal paths); verify the whole CTest suite green and both-OS parity visible in CI logs
 
 ## 7. Docs, demo, and public-repo readiness (P6)
 
