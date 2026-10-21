@@ -156,3 +156,17 @@ add_test(NAME app-family-test COMMAND tether-app-tests)
 add_executable(tether-audit-tests audit_test.cpp)
 target_link_libraries(tether-audit-tests PRIVATE doctest::doctest tether-cli tether-common)
 add_test(NAME audit-test COMMAND tether-audit-tests)
+
+# Task 6.10: per-family E2E scenario checks over REAL loopback TCP sessions.
+# Every verb rides the full operator stack (run_cli -> TcpOperConsole ->
+# TcpConsoleTransport -> live sockets -> AgentSession -> install_commands ->
+# the REAL capability dispatcher), with per-family injections only where a
+# host device would be required (power tripwire, fake screen/camera/input
+# sources); process/file/app reality stays per-OS real. Launch assertions
+# ride the argv probe child (same dependency pattern as the 6.2/6.8 suites).
+add_executable(tether-families-e2e-tests families_e2e_test.cpp)
+target_link_libraries(tether-families-e2e-tests PRIVATE
+    doctest::doctest tether-cli tether-command-handler tether-syscalls
+    tether-protocol tether-transport tether-common)
+add_dependencies(tether-families-e2e-tests tether-argv-probe)
+add_test(NAME families-e2e-test COMMAND tether-families-e2e-tests)
