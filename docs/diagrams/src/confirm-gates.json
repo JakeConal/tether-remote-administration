@@ -1,0 +1,217 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "The two confirmation gates",
+    "subtitle": "Independent checks at each end, covering different verb sets",
+    "output": "docs/diagrams/confirm-gates.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "lanes": [
+    {
+      "id": "op",
+      "label": "Operator"
+    },
+    {
+      "id": "console",
+      "label": "Console"
+    },
+    {
+      "id": "agent",
+      "label": "Agent"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "Intake",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "gates",
+      "label": "Two gates",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "security"
+    },
+    {
+      "id": "execute",
+      "label": "Execute",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "exec",
+    "lookup",
+    "gate",
+    "cmd",
+    "gateb",
+    "run"
+  ],
+  "nodes": [
+    {
+      "id": "exec",
+      "lane": "op",
+      "col": 0,
+      "type": "external",
+      "label": "exec lab-1 delete",
+      "sublabel": "the operator's verb",
+      "width": 152
+    },
+    {
+      "id": "lookup",
+      "lane": "console",
+      "col": 1,
+      "type": "backend",
+      "label": "Unknown agent?",
+      "sublabel": "yes -> exit 3",
+      "width": 152,
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 286,
+          "end_line": 291
+        }
+      ]
+    },
+    {
+      "id": "gate",
+      "lane": "console",
+      "col": 2,
+      "type": "security",
+      "label": "Gate A: --yes or y",
+      "sublabel": "no -> exit 4, nothing sent",
+      "width": 152,
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 296,
+          "end_line": 312
+        }
+      ]
+    },
+    {
+      "id": "cmd",
+      "lane": "console",
+      "col": 3,
+      "type": "frontend",
+      "label": "CMD frame",
+      "sublabel": "the operator's own argv",
+      "width": 152,
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 339,
+          "end_line": 348
+        }
+      ]
+    },
+    {
+      "id": "gateb",
+      "lane": "agent",
+      "col": 4,
+      "type": "security",
+      "label": "Gate B: confirm token",
+      "sublabel": "no -> missing_confirmation",
+      "width": 168,
+      "sources": [
+        {
+          "path": "lib/syscalls/matrix.cpp",
+          "line": 593,
+          "end_line": 601
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "lane": "agent",
+      "col": 5,
+      "type": "cloud",
+      "label": "Run the family",
+      "sublabel": "the confirm token is stripped",
+      "width": 152,
+      "sources": [
+        {
+          "path": "lib/syscalls/matrix.cpp",
+          "line": 589,
+          "end_line": 605
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-exec-lookup",
+      "from": "exec",
+      "to": "lookup",
+      "role": "main"
+    },
+    {
+      "id": "e-lookup-gate",
+      "from": "lookup",
+      "to": "gate",
+      "role": "main",
+      "label": "known agent"
+    },
+    {
+      "id": "e-gate-cmd",
+      "from": "gate",
+      "to": "cmd",
+      "role": "main",
+      "label": "confirmed",
+      "variant": "security"
+    },
+    {
+      "id": "e-cmd-gateb",
+      "from": "cmd",
+      "to": "gateb",
+      "role": "main"
+    },
+    {
+      "id": "e-gateb-run",
+      "from": "gateb",
+      "to": "run",
+      "role": "main",
+      "label": "confirmed",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Two Gates, Different Verb Sets",
+      "items": [
+        "Gate A covers delete, shutdown and restart",
+        "Gate B covers all five destructive verbs: delete, move, copy, shutdown, restart",
+        "move and copy skip Gate A, so the console dispatches them and the agent refuses them"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "What a Refusal Means",
+      "items": [
+        "Gate A refusal: nothing is sent, exit code 4",
+        "Gate B refusal: nothing is executed, exit code 1",
+        "The console never injects the confirm token for you"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Where Each Gate Lives",
+      "items": [
+        "Gate A is the console-side kDestructiveCommands list",
+        "Gate B is the destructive flag on the capability matrix row",
+        "The unknown-agent check precedes both gates"
+      ]
+    }
+  ]
+}

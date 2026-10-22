@@ -13,7 +13,7 @@ The loaders never substitute silent defaults for a malformed file.
 
 Parsed by `load_console_config()` (`lib/common/config.cpp`).
 
-```json
+```
 {
     "listen_address": "0.0.0.0",
     "port": 47474,
@@ -69,7 +69,7 @@ hard failure. Only "the file is absent" is a fallback.
 
 Parsed by `load_agent_config()` (`lib/common/config.cpp`).
 
-```json
+```
 {
     "console_address": "10.0.0.5",
     "console_port": 47474,
@@ -130,7 +130,7 @@ documented feature.
 Read by the console at startup (`console/main.cpp`). A JSON object mapping an
 agent identity to its pre-shared token.
 
-```json
+```
 {
     "lab-1": "3f9c1d7e5b2a8046c1f9e0d3b7a4c5e2d8b6f1a0c3e7d9b4f2a6c8e0d1b3f5a7",
     "lab-2": "9a1c4e7b2d8f0356a9c2e7b4d1f8a0356c9e2b7d4f1a8c3e6b9d2f5a8c1e4b7d"
@@ -165,7 +165,7 @@ Template: [`docs/examples/tokens.example.json`](examples/tokens.example.json).
 
 Nested under `gmail` in the console config.
 
-```json
+```
 {
     "gmail": {
         "enabled": true,
@@ -207,7 +207,7 @@ validated — the section is structured but off.
 Read by `load_gmail_credentials()` (`lib/transport/gmail.cpp`). Every field
 must be a non-empty string:
 
-```json
+```
 {
     "account": "tether-relay@example.com",
     "client_id": "....apps.googleusercontent.com",
@@ -277,22 +277,7 @@ a real secret, and none of them should be edited in place; copy them out.
 
 ## 7. Quick reference
 
-```
-console config                       agent config
-┌───────────────────────────┐        ┌───────────────────────────┐
-│ listen_address  (required)│        │ console_address (required)│
-│ port           (required) │        │ console_port    (47474)   │
-│ token_store_path (required)│       │ agent_name     (required) │
-│ audit_path      (optional)│        │ instance_id    (agent_name)│
-│ agent_dial_wait_ms (10000)│        │ token          (required) │
-│ gmail           (optional)│        └───────────────────────────┘
-└───────────────────────────┘
+![The four configuration artefacts and every key they carry.](diagrams/assets/config-layout.png)
 
-token store                      gmail credentials
-┌───────────────────────────┐    ┌───────────────────────────┐
-│ "<identity>": "<token>"   │    │ account                   │
-│ ...                        │    │ client_id                 │
-└───────────────────────────┘    │ client_secret             │
-                                 │ refresh_token             │
-                                 └───────────────────────────┘
-```
+*Interactive version: [config-layout.html](diagrams/config-layout.html).*
+

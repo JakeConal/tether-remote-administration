@@ -48,3 +48,12 @@ Conclusion: **no credentials or admin email lists appear anywhere in source**;
 paths outside the repo. The policy holds as of this record; new code must keep
 it (any tree change that reintroduces a literal address or secret is a policy
 violation, not a refactor).
+
+> **Later amendment (documentation set, 2026-10-21).** The searches above
+> were executed against the code tree as it stood on 2026-10-21. The developer
+> documentation added afterwards mentions two of the searched literals **in
+> prose** — `admin.txt` in `docs/security.md` and this file, and `12345` in
+> `docs/security.md` and this file — while describing their retirement. No
+> file, code path, or config field carries either name; only the human-readable
+> prose does. The **source** result stands unchanged. `docs/security.md` §9
+> carries the current statement of the policy.

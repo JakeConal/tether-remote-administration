@@ -28,7 +28,7 @@ read, any console is built, and anything is audited.
 
 ### `agents`
 
-```console
+```
 $ tether-console --config console.json agents
 lab-1 live
 lab-2 down
@@ -45,7 +45,7 @@ lab-3 stale
 
 ### `exec`
 
-```console
+```
 $ tether-console --config console.json exec lab-1 list
 $ tether-console --config console.json exec lab-1 ls /tmp
 $ tether-console --config console.json exec lab-1 delete confirm /tmp/x --yes
@@ -68,7 +68,7 @@ $ tether-console --config console.json exec lab-1 delete confirm /tmp/x --yes
 
 ### `cancel`
 
-```console
+```
 $ tether-console --config console.json cancel lab-1 7
 status: cancel sent for seq 7
 ```
@@ -110,27 +110,36 @@ Nineteen verbs across seven families. Matching is **exact and
 case-sensitive** — `List` is outside the set and is refused with
 `unknown_command`.
 
-| Command | Family | Destructive | Args | Success output |
-| --- | --- | :---: | --- | --- |
-| `list` | process | — | 0 | One `<pid> <name>` line per process |
-| `start` | process | — | ≥ 1 | `started pid <pid>` |
-| `stop` | process | — | 1 | `stopped pid <pid>` (plus `('<name>')` when matched by name) |
-| `ls` | file | — | 0–1 | `<name>/` for a directory, `<name> <size>` for a file |
-| `delete` | file | ✔ | 1 | `deleted <path>` |
-| `move` | file | ✔ | 2 | `moved <src> -> <dst>` |
-| `copy` | file | ✔ | 2 | `copied <src> -> <dst>` |
-| `shutdown` | power | ✔ | 0 | `shutdown initiated` (+ `the operating system owns the transition from here`) |
-| `restart` | power | ✔ | 0 | `restart initiated` (+ `the operating system owns the transition from here`) |
-| `screenshot` | capture | — | 0 | `captured the screen as screenshot.png` **+ a PNG file result** |
-| `start_webcam` | camera | — | 0 | `camera job started` (+ `the capture runs in the background; …`) |
-| `stop_webcam` | camera | — | 0 | `camera job stopped; delivered webcam.png` **+ a PNG file result** |
-| `start_keylogger` | input | — | 0–1 | `keylogger job started` (+ the storage line and the job-event JSON) |
-| `stop_keylogger` | input | — | 0 | `keylogger job stopped; delivered <name>` **+ a capture file result** |
-| `lock_keyboard` | input | — | 0 | `keyboard locked` (+ `unlock_keyboard releases the lock`) |
-| `unlock_keyboard` | input | — | 0 | `keyboard unlocked` |
-| `list_app` | app | — | 0 | One `<name> <path>` line per entry |
-| `start_app` | app | — | 1 | `started pid <pid>` |
-| `stop_app` | app | — | 1 | Same as `stop` |
+| Command | Family | Destructive | Args | Confirmed | Success output |
+| --- | --- | :---: | --- | :---: | --- |
+| `list` | process | — | 0 | ✅ | One `<pid> <name>` line per process |
+| `start` | process | — | ≥ 1 | ✅ | `started pid <pid>` |
+| `stop` | process | — | 1 | ✅ | `stopped pid <pid>` (plus `('<name>')` when matched by name) |
+| `ls` | file | — | 0–1 | ✅ | `<name>/` for a directory, `<name> <size>` for a file |
+| `delete` | file | ✔ | 1 | ✅ | `deleted <path>` |
+| `move` | file | ✔ | 2 | ✅ | `moved <src> -> <dst>` |
+| `copy` | file | ✔ | 2 | ✅ | `copied <src> -> <dst>` |
+| `shutdown` | power | ✔ | 0 | ✅ | `shutdown initiated` (+ `the operating system owns the transition from here`) |
+| `restart` | power | ✔ | 0 | ✅ | `restart initiated` (+ `the operating system owns the transition from here`) |
+| `screenshot` | capture | — | 0 | ✅ | `captured the screen as screenshot.png` **+ a PNG file result** |
+| `start_webcam` | camera | — | 0 | ✅ | `camera job started` (+ `the capture runs in the background; …`) |
+| `stop_webcam` | camera | — | 0 | ✅ | `camera job stopped; delivered webcam.png` **+ a PNG file result** |
+| `start_keylogger` | input | — | 0–1 | ✅ | `keylogger job started` (+ the storage line and the job-event JSON) |
+| `stop_keylogger` | input | — | 0 | ✅ | `keylogger job stopped; delivered <name>` **+ a capture file result** |
+| `lock_keyboard` | input | — | 0 | ✅ | `keyboard locked` (+ `unlock_keyboard releases the lock`) |
+| `unlock_keyboard` | input | — | 0 | ✅ | `keyboard unlocked` |
+| `list_app` | app | — | 0 | ✅ | One `<name> <path>` line per entry |
+| `start_app` | app | — | 1 | ✅ | `started pid <pid>` |
+| `stop_app` | app | — | 1 | ✅ | Same as `stop` |
+
+Every command in the closed set is implemented and pinned by an automated
+test. The "Confirmed" column names the suite per family: `process-family-test`,
+`file-family-test`, `power-family-test`, `capture-family-test`,
+`camera-family-test`, `input-family-test`, `app-family-test` — and
+`families-e2e-test` runs every family end to end over real loopback sockets.
+The one deliberate exception: the power family's *refusal* path runs against
+the real per-OS backend, but a *confirmed* call uses an injected backend — no
+test ever triggers a real power transition.
 
 The "Success output" column lists the **primary** line. Several commands
 append a second explanatory line (shown in parentheses); the parenthesised
@@ -158,7 +167,7 @@ X server (see the capture family below).
 **`start <program> [args...]`** — at least one argument. The argument vector
 is passed to the OS **as argv**; it is never handed to a shell.
 
-```console
+```
 $ tether-console exec lab-1 start /bin/sh -c 'echo hi'
 ```
 
@@ -191,7 +200,7 @@ decoded as **UTF-8** on Windows too (`fs::u8path`, not the ANSI-code-page
 
 **`ls [dir]`** — zero or one argument; the default directory is `.`.
 
-```console
+```
 $ tether-console exec lab-1 ls /etc
 alpha.txt 5
 beta/
@@ -359,27 +368,9 @@ in the console's `kDestructiveCommands` list — so the console dispatches them
 without prompting, and the *agent* refuses them with `missing_confirmation`
 (exit code 1, not 4).
 
-```
-  operator          console                         agent
-     │                │                               │
-     │ exec lab-1     │                               │
-     │ delete /tmp/x  │                               │
-     │────────────────▶│                               │
-     │                │ GATE A (delete / shutdown /    │
-     │                │   restart only):              │
-     │                │   --yes, or an interactive y?  │
-     │                │   no  → exit 4, nothing sent  │
-     │                │   yes → forward               │
-     │                │──────────── CMD ──────────────▶│
-     │                │                               │ GATE B (delete / move /
-     │                │                               │   copy / shutdown /
-     │                │                               │   restart): args[0]
-     │                │                               │   == "confirm"?
-     │                │                               │   no  → missing_
-     │                │                               │         confirmation
-     │                │◄──────────── ERR ──────────────│   yes → strip the
-     │                │                               │         token, run
-```
+![The two confirmation gates, the verbs each one covers, and where each one lives.](diagrams/assets/confirm-gates.png)
+
+*Interactive version: [confirm-gates.html](diagrams/confirm-gates.html).*
 
 **Gate A (console side)** — `console/cli.cpp`:
 
@@ -407,14 +398,14 @@ without prompting, and the *agent* refuses them with `missing_confirmation`
 
 The console does **not** inject `confirm`. Both gates must be satisfied:
 
-```console
+```
 $ tether-console exec lab-1 delete confirm /tmp/scratch.txt --yes
 ```
 
 For `move` and `copy` only Gate B applies — but the literal `confirm` token is
 still required:
 
-```console
+```
 $ tether-console exec lab-1 move confirm /a /b
 ```
 
@@ -491,7 +482,7 @@ The agent's shaping rules (`agent/command_handler.cpp`):
 
 ## 7. Cancellation
 
-```console
+```
 $ tether-console --config console.json cancel lab-1 7
 ```
 

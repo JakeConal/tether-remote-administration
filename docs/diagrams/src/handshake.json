@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "HMAC challenge-response handshake",
+    "subtitle": "Protocol v2, four frames, and a token that never crosses the wire",
+    "output": "docs/diagrams/handshake.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "participants": [
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "tether-agent",
+      "sublabel": "target machine",
+      "sources": [
+        {
+          "path": "lib/protocol/handshake.cpp",
+          "line": 139,
+          "end_line": 152
+        }
+      ]
+    },
+    {
+      "id": "console",
+      "type": "frontend",
+      "label": "tether-console",
+      "sublabel": "operator seat",
+      "sources": [
+        {
+          "path": "lib/protocol/handshake.cpp",
+          "line": 92,
+          "end_line": 137
+        },
+        {
+          "path": "lib/protocol/session.cpp",
+          "line": 172,
+          "end_line": 206
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 215,
+      "label": "Identify"
+    },
+    {
+      "from": 220,
+      "to": 300,
+      "label": "Challenge and answer"
+    },
+    {
+      "from": 320,
+      "to": 400,
+      "label": "Acknowledge"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-hello",
+      "from": "agent",
+      "to": "console",
+      "y": 160,
+      "label": "HELLO {agent_id, agent_name, protocol_version:2}",
+      "variant": "default",
+      "note": "The console resolves the token first. An unknown identity is refused before any nonce is issued."
+    },
+    {
+      "id": "m-challenge",
+      "from": "console",
+      "to": "agent",
+      "y": 226,
+      "label": "CHALLENGE {nonce}",
+      "variant": "security",
+      "note": "16 fresh random bytes, hex-encoded to 32 characters. The nonce is single-use: the console consumes it on the first answer."
+    },
+    {
+      "id": "m-answer",
+      "from": "agent",
+      "to": "console",
+      "y": 292,
+      "label": "CHALLENGE {nonce, hmac_response}",
+      "variant": "security",
+      "note": "The agent signs the 16 raw nonce bytes with HMAC-SHA256, keyed with the provisioned token. The token never crosses the wire."
+    },
+    {
+      "id": "m-authok",
+      "from": "console",
+      "to": "agent",
+      "y": 358,
+      "label": "AUTH_OK {}",
+      "variant": "emphasis",
+      "note": "The console recomputes and compares in constant time. Only on equality does it acknowledge; every failure is ERR auth_failed."
+    }
+  ],
+  "activations": [
+    {
+      "participant": "console",
+      "from": 155,
+      "to": 365,
+      "type": "frontend"
+    },
+    {
+      "participant": "agent",
+      "from": 158,
+      "to": 300,
+      "type": "backend"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "What the Handshake Buys",
+      "items": [
+        "No command traffic can flow before the session is authenticated",
+        "A wrong token cannot be brute-forced online: each attempt consumes the nonce",
+        "An unknown identity is refused before any challenge is issued"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Refusal Taxonomy",
+      "items": [
+        "Every failure becomes ERR with code auth_failed",
+        "The specific reason travels as prose in the message field",
+        "AUTH_OK is never sent after a failure"
+      ]
+    }
+  ]
+}

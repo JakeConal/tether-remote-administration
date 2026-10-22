@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "54a02ad5-a5ec-4d68-8c45-7a1f39ade1d3",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\networking-project\\docs\\diagrams\\src\\agent-thread-model.json",
+  "output": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\networking-project\\docs\\diagrams\\agent-thread-model.html",
+  "specification": {
+    "sha256": "c6d253b067794181def5f34ccfe2519f38b559623c61e4d931d5ea0984c4b820",
+    "bytes": 5280
+  },
+  "artifact": {
+    "sha256": "0a02081c74f1375a327dcdaded1d2420852ff992804a8cfccddc6a072f9ccb61",
+    "bytes": 819772
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "9c3c3487-fab3-4138-b350-3fd6a4f61b41",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\networking-project\\docs\\diagrams\\src\\handshake.json",
+  "output": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\networking-project\\docs\\diagrams\\handshake.html",
+  "specification": {
+    "sha256": "95157d211dd80c86c22ec299af70de0f085b64bcb6a23a2dbd47704229fdb91d",
+    "bytes": 3559
+  },
+  "artifact": {
+    "sha256": "47a943a9e4ef8733f3285561283812f311aa8a04d0845a4525bca5b9c3a4566c",
+    "bytes": 809311
+  }
+}

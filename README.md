@@ -17,16 +17,9 @@ Operator console and dial-out agent for administering machines you own — from 
 
 tether is a two-runtime tool for administering machines you own from one operator seat. Each target machine runs an **agent** that dials out and holds an authenticated session; the operator **console** lists its dialed-in agents and drives them with a small, testable command set. A screenshot, a process listing, or a webcam frame streams back over one protocol with per-command sequence correlation — no scraping, no locale-dependent parsing.
 
-```
-   operator seat                         target machines
-┌────────────────────┐             ┌──────────────────────┐
-│ tether console     │◄── dials ───│ tether agent (lab-1) │
-│ CLI: agents/exec/  │             │ capability families: │
-│ cancel + audit     │ authenticated┌─│ process · file ·     │
-│                    │   HMAC-     │ │ power · capture ·    │
-│ one verb per call  │   session   └─│ camera · input · app │
-└────────────────────┘             └──────────────────────┘
-```
+![The two runtimes of tether: the operator console and the target machine's agent, joined by an authenticated session.](docs/diagrams/assets/system-overview.png)
+
+*Interactive version: [system-overview.html](docs/diagrams/system-overview.html).*
 
 - **Dial-out, never listen.** The agent makes one outbound TCP connection from its own config; nothing on the target listens, so tether works through NAT and firewalls without opening inbound ports.
 - **Session security.** Every session authenticates before any command traffic: an HMAC-SHA256 challenge-response over a pre-shared token provisioned at install time. The token never crosses the wire.
@@ -105,16 +98,28 @@ For a narrated, fully scripted end-to-end walkthrough — connection, listing, p
 
 All nineteen commands ride one console verb: `tether exec <agent> <command> [args...]`.
 
-| Command | Family | Confirm | Notes |
-| --- | --- | :---: | --- |
-| `list` · `start` · `stop` | process | — | process snapshot; argv-based launch; stop by pid or exact image name |
-| `ls` · `delete` · `move` · `copy` | file | `delete` · `move` · `copy` | `std::filesystem` on both OSes; same verbs everywhere |
-| `shutdown` · `restart` | power | ✔ | Windows shutdown API / Linux logind |
-| `screenshot` | capture | — | full-screen grab, delivered as a PNG file result |
-| `start_webcam` · `stop_webcam` | camera | — | background job; **stop delivers the accumulated frame** |
-| `start_keylogger <storage>` · `stop_keylogger` | input | — | background job; stop delivers the capture file |
-| `lock_keyboard` · `unlock_keyboard` | input | — | X11 on Linux; structured refusal on Wayland, session stays usable |
-| `list_app` · `start_app` · `stop_app` | app | — | Start-menu `.lnk` (Windows) / `.desktop` entries (Linux), launched as argv — no shell |
+| Command | Family | Notes |
+| --- | --- | --- |
+| `list` | process | process snapshot |
+| `start` | process | argv-based launch; no shell |
+| `stop` | process | stop by pid or exact image name |
+| `ls` | file | one directory listing, sorted |
+| `delete` | file | removes a file or one empty directory |
+| `move` | file | renames; replaces the destination |
+| `copy` | file | overwrites the destination; recurses into directories |
+| `shutdown` | power | Windows shutdown API / Linux logind |
+| `restart` | power | Windows shutdown API / Linux logind |
+| `screenshot` | capture | full-screen grab, delivered as a PNG file result |
+| `start_webcam` | camera | background job |
+| `stop_webcam` | camera | background job; **delivers the accumulated frame** |
+| `start_keylogger <storage>` | input | background job; appends to the storage file |
+| `stop_keylogger` | input | background job; **delivers the accumulated capture** |
+| `lock_keyboard` | input | X11 on Linux; structured refusal on Wayland, session stays usable |
+| `unlock_keyboard` | input | releases the lock |
+| `list_app` | app | Start-menu `.lnk` (Windows) / `.desktop` entries (Linux) |
+| `start_app` | app | launched as argv — no shell |
+| `stop_app` | app | stops by pid or exact image name |
+
 
 ### The confirm gate
 

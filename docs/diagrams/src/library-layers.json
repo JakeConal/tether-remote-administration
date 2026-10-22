@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "tether library layering",
+    "subtitle": "Six static libraries, two executables, one dependency direction",
+    "output": "docs/diagrams/library-layers.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "components": [
+    {
+      "id": "console_exe",
+      "type": "frontend",
+      "label": "tether-console",
+      "sublabel": "executable",
+      "pos": [
+        30,
+        30
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "console/CMakeLists.txt",
+          "line": 9,
+          "end_line": 11
+        }
+      ]
+    },
+    {
+      "id": "agent_exe",
+      "type": "backend",
+      "label": "tether-agent",
+      "sublabel": "executable",
+      "pos": [
+        30,
+        120
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "agent/CMakeLists.txt",
+          "line": 9,
+          "end_line": 11
+        }
+      ]
+    },
+    {
+      "id": "cli_lib",
+      "type": "frontend",
+      "label": "tether-cli",
+      "sublabel": "cli, tcp_console, audit",
+      "pos": [
+        255,
+        30
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "console/CMakeLists.txt",
+          "line": 1,
+          "end_line": 7
+        }
+      ]
+    },
+    {
+      "id": "handler_lib",
+      "type": "backend",
+      "label": "tether-command-handler",
+      "sublabel": "command_handler",
+      "pos": [
+        255,
+        120
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "agent/CMakeLists.txt",
+          "line": 4,
+          "end_line": 7
+        }
+      ]
+    },
+    {
+      "id": "transport_lib",
+      "type": "messagebus",
+      "label": "tether-transport",
+      "sublabel": "tcp, gmail",
+      "pos": [
+        480,
+        75
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "lib/transport/CMakeLists.txt",
+          "line": 4,
+          "end_line": 13
+        }
+      ]
+    },
+    {
+      "id": "syscalls_lib",
+      "type": "cloud",
+      "label": "tether-syscalls",
+      "sublabel": "matrix + 7 families",
+      "pos": [
+        480,
+        175
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "lib/syscalls/CMakeLists.txt",
+          "line": 1,
+          "end_line": 33
+        }
+      ]
+    },
+    {
+      "id": "protocol_lib",
+      "type": "messagebus",
+      "label": "tether-protocol",
+      "sublabel": "envelope, payloads, handshake, session",
+      "pos": [
+        705,
+        75
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "lib/protocol/CMakeLists.txt",
+          "line": 1,
+          "end_line": 16
+        }
+      ]
+    },
+    {
+      "id": "common_lib",
+      "type": "cloud",
+      "label": "tether-common",
+      "sublabel": "config, logging, base64",
+      "pos": [
+        930,
+        75
+      ],
+      "size": [
+        175,
+        58
+      ],
+      "sources": [
+        {
+          "path": "lib/common/CMakeLists.txt",
+          "line": 1,
+          "end_line": 3
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "c-cli",
+      "from": "console_exe",
+      "to": "cli_lib",
+      "label": "uses"
+    },
+    {
+      "id": "a-handler",
+      "from": "agent_exe",
+      "to": "handler_lib",
+      "label": "uses"
+    },
+    {
+      "id": "cli-transport",
+      "from": "cli_lib",
+      "to": "transport_lib",
+      "label": "links"
+    },
+    {
+      "id": "handler-transport",
+      "from": "handler_lib",
+      "to": "transport_lib",
+      "label": "links"
+    },
+    {
+      "id": "handler-syscalls",
+      "from": "handler_lib",
+      "to": "syscalls_lib",
+      "label": "dispatches"
+    },
+    {
+      "id": "transport-protocol",
+      "from": "transport_lib",
+      "to": "protocol_lib",
+      "label": "frames"
+    },
+    {
+      "id": "protocol-common",
+      "from": "protocol_lib",
+      "to": "common_lib",
+      "label": "uses"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Layer Rules",
+      "items": [
+        "Dependencies flow one way: a layer never reaches back up",
+        "The protocol layer never sees a socket, an OS API, or the command set",
+        "The syscall layer never sees the wire, the console, or CLI details"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Direct Edges Not Drawn",
+      "items": [
+        "tether-cli also links tether-protocol directly: it speaks Cmd and CommandView",
+        "tether-command-handler also links tether-common and tether-protocol",
+        "tether-console links tether-common, tether-protocol and tether-transport"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Third-Party Dependencies",
+      "items": [
+        "tether-common and tether-protocol use nlohmann-json; tether-protocol uses mbedtls",
+        "tether-transport uses asio publicly and cpr privately (Gmail only)",
+        "tether-syscalls uses OpenCV and, on Linux, X11 - and no tether library at all"
+      ]
+    }
+  ]
+}

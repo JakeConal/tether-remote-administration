@@ -24,20 +24,9 @@ lives in [readiness-decisions.md](readiness-decisions.md).
 
 ## 2. Trust boundaries
 
-```
-   ┌──────────── operator seat ────────────┐      ┌──── target machine ────┐
-   │                                       │      │                       │
-   │  console.json                         │      │  agent.json           │
-   │  tokens.json  ◄── the shared secret ──┼──────┼──►  token             │
-   │                                       │      │                       │
-   │  CLI ──► confirm gate ──► session ────┼──┬───┼──► session ──► family│
-   │                                       │  │   │      │               │
-   │  audit.jsonl ◄── every attempt        │  │   │      ▼               │
-   │                                       │  │   │   OS APIs            │
-   └───────────────────────────────────────┘  │   └───────────────────────┘
-                                              │
-                                    untrusted network
-```
+![Where the secret stops and the untrusted zone begins.](diagrams/assets/trust-boundaries.png)
+
+*Interactive version: [trust-boundaries.html](diagrams/trust-boundaries.html).*
 
 **The untrusted zone is everything between the two processes.** The token is
 the only thing that must not cross it.
@@ -50,25 +39,9 @@ the only thing that must not cross it.
 
 A four-step HMAC-SHA256 challenge-response over a pre-shared token:
 
-```
-  agent                                            console
-    │  HELLO {agent_id, agent_name, protocol_version:2}  │
-    │────────────────────────────────────────────────►  │
-    │                                                  │ resolve the token
-    │                                                  │  → unknown identity?
-    │                                                  │    ERR auth_failed → Down
-    │  CHALLENGE {nonce}  (16 random bytes, hex)      │
-    │◄────────────────────────────────────────────────  │
-    │                                                  │
-    │  decode the nonce hex → 16 RAW bytes            │
-    │  hmac = HMAC-SHA256(token, 16 raw bytes)         │
-    │  CHALLENGE {nonce, hmac_response}                │
-    │────────────────────────────────────────────────►  │
-    │                                                  │ recompute; compare in
-    │                                                  │ CONSTANT TIME
-    │  AUTH_OK {}                                      │
-    │◄────────────────────────────────────────────────  │
-```
+![The four frames of the HMAC challenge-response handshake.](diagrams/assets/handshake.png)
+
+*Interactive version: [handshake.html](diagrams/handshake.html).*
 
 ### Properties
 

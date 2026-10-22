@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d52f3996-5a72-48af-9cc4-734cb5366b5f",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\networking-project\\docs\\diagrams\\src\\background-jobs.json",
+  "output": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\networking-project\\docs\\diagrams\\background-jobs.html",
+  "specification": {
+    "sha256": "95f67394a355e19ddd9ab9c4d863c7863390cf032cc28d34e67d99db4b2b37cb",
+    "bytes": 5890
+  },
+  "artifact": {
+    "sha256": "384669b3959c395f60a5a04e8243164ab51e0be462a030d3a28a562a24faa3a3",
+    "bytes": 824672
+  }
+}

@@ -6,6 +6,15 @@ with the **actual output** of a real run (Linux/WSL host, loopback
 transport). Every line quoted below was produced by the run, not written by
 hand.
 
+> **Reading the paths.** The transcript was captured with the config
+> directory given as an **absolute** path
+> (`bash scripts/demo.sh ./build /home/<user>/tether-demo`), so the paths
+> echoed by the agent are absolute. The command lines below are shown in the
+> shorter `./demo-run/...` form the default invocation uses
+> (`bash scripts/demo.sh ./build ./demo-run`); the agent echoes the storage
+> argument **verbatim**, so on a default run the capture line reads
+> `./demo-run/keys.log` instead of the absolute path.
+
 **How to run it**
 
 ```sh

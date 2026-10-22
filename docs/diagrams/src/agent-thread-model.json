@@ -1,0 +1,244 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Agent thread model",
+    "subtitle": "One main thread does everything; background jobs get their own",
+    "output": "docs/diagrams/agent-thread-model.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Agent main thread"
+    },
+    {
+      "id": "job",
+      "label": "Background job thread"
+    }
+  ],
+  "phases": [
+    {
+      "id": "connect",
+      "label": "Connect",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "serve",
+      "label": "Serve",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "dial",
+    "handshake",
+    "pump",
+    "command"
+  ],
+  "nodes": [
+    {
+      "id": "redial",
+      "lane": "main",
+      "col": 0,
+      "type": "backend",
+      "label": "Redial",
+      "sublabel": "backoff resets to 500 ms",
+      "width": 130,
+      "sources": [
+        {
+          "path": "agent/main.cpp",
+          "line": 110,
+          "end_line": 151
+        }
+      ]
+    },
+    {
+      "id": "dial",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "Dial out",
+      "sublabel": "500 ms doubling to a 10 s cap",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/transport/tcp.hpp",
+          "line": 133,
+          "end_line": 136
+        }
+      ]
+    },
+    {
+      "id": "handshake",
+      "lane": "main",
+      "col": 2,
+      "type": "security",
+      "label": "Handshake",
+      "sublabel": "HELLO, CHALLENGE, AUTH_OK",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/protocol/handshake.cpp",
+          "line": 92,
+          "end_line": 152
+        }
+      ]
+    },
+    {
+      "id": "pump",
+      "lane": "main",
+      "col": 3,
+      "type": "backend",
+      "label": "Pump session",
+      "sublabel": "10 ms cadence",
+      "width": 130,
+      "sources": [
+        {
+          "path": "agent/main.cpp",
+          "line": 110,
+          "end_line": 152
+        },
+        {
+          "path": "lib/protocol/session.cpp",
+          "line": 453,
+          "end_line": 494
+        }
+      ]
+    },
+    {
+      "id": "command",
+      "lane": "main",
+      "col": 4,
+      "type": "backend",
+      "label": "Run command",
+      "sublabel": "dispatcher, then family",
+      "width": 130,
+      "sources": [
+        {
+          "path": "agent/command_handler.cpp",
+          "line": 81,
+          "end_line": 114
+        }
+      ]
+    },
+    {
+      "id": "down",
+      "lane": "main",
+      "col": 5,
+      "type": "external",
+      "label": "Session down",
+      "sublabel": "EOF, error, or refusal",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/protocol/session.cpp",
+          "line": 637,
+          "end_line": 644
+        }
+      ]
+    },
+    {
+      "id": "jobworker",
+      "lane": "job",
+      "col": 4,
+      "type": "cloud",
+      "label": "Job worker",
+      "sublabel": "own thread, bounded stop",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/jobs.cpp",
+          "line": 73,
+          "end_line": 85
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-redial-dial",
+      "from": "redial",
+      "to": "dial",
+      "role": "main"
+    },
+    {
+      "id": "e-dial-handshake",
+      "from": "dial",
+      "to": "handshake",
+      "role": "main"
+    },
+    {
+      "id": "e-handshake-pump",
+      "from": "handshake",
+      "to": "pump",
+      "role": "main"
+    },
+    {
+      "id": "e-pump-command",
+      "from": "pump",
+      "to": "command",
+      "role": "main"
+    },
+    {
+      "id": "e-command-down",
+      "from": "command",
+      "to": "down",
+      "role": "error",
+      "label": "session lost",
+      "variant": "security"
+    },
+    {
+      "id": "e-down-redial",
+      "from": "down",
+      "to": "redial",
+      "role": "return",
+      "label": "loop"
+    },
+    {
+      "id": "e-command-job",
+      "from": "command",
+      "to": "jobworker",
+      "role": "branch",
+      "label": "start_webcam / start_keylogger",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "No Pool, No Queue",
+      "items": [
+        "The agent's own main thread connects, handshakes, pumps, and dispatches",
+        "There is no thread pool and no work queue in the agent",
+        "The pump cadence is 10 ms"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Redial Behaviour",
+      "items": [
+        "The backoff resets to 500 ms on every successful connect",
+        "The agent never exits because the console is absent",
+        "The dispatcher outlives every link, so a redial is safe"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Where Threads Live",
+      "items": [
+        "Background jobs add one thread each, in the syscall layer",
+        "The Windows keyboard hook is dispatched by its owning job thread",
+        "The console has no thread of its own either: its transport is pump-driven"
+      ]
+    }
+  ]
+}

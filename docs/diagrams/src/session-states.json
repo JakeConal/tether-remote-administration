@@ -1,0 +1,138 @@
+{
+  "schema_version": 3,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Session state machine",
+    "subtitle": "Four states; Stale is console-side only",
+    "output": "docs/diagrams/session-states.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "mainPath": [
+    "connecting",
+    "established",
+    "down"
+  ],
+  "states": [
+    {
+      "id": "connecting",
+      "type": "start",
+      "label": "Connecting",
+      "sublabel": "handshake in progress",
+      "sources": [
+        {
+          "path": "lib/protocol/session.hpp",
+          "line": 13,
+          "end_line": 18
+        }
+      ]
+    },
+    {
+      "id": "established",
+      "type": "active",
+      "label": "Established",
+      "sublabel": "commands are allowed",
+      "sources": [
+        {
+          "path": "lib/protocol/session.hpp",
+          "line": 13,
+          "end_line": 18
+        }
+      ]
+    },
+    {
+      "id": "stale",
+      "type": "neutral",
+      "label": "Stale",
+      "sublabel": "console side only: superseded",
+      "sources": [
+        {
+          "path": "lib/protocol/session.cpp",
+          "line": 674,
+          "end_line": 687
+        }
+      ]
+    },
+    {
+      "id": "down",
+      "type": "failure",
+      "label": "Down",
+      "sublabel": "terminal: refused, dead, or EOF",
+      "sources": [
+        {
+          "path": "lib/protocol/session.hpp",
+          "line": 13,
+          "end_line": 18
+        }
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "id": "t-auth",
+      "from": "connecting",
+      "to": "established",
+      "label": "HMAC challenge answered",
+      "variant": "emphasis",
+      "note": "The console sends AUTH_OK and only then does command traffic begin."
+    },
+    {
+      "id": "t-authfail",
+      "from": "connecting",
+      "to": "down",
+      "label": "handshake failed or auth timeout",
+      "variant": "security",
+      "note": "An unknown identity is refused before any challenge is issued."
+    },
+    {
+      "id": "t-lost",
+      "from": "established",
+      "to": "down",
+      "label": "peer dead, stream error, or EOF",
+      "variant": "security"
+    },
+    {
+      "id": "t-stale",
+      "from": "established",
+      "to": "stale",
+      "label": "newer session for the same identity",
+      "variant": "dashed",
+      "note": "The stale session is ineligible for commands and its timers stop."
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Timers",
+      "items": [
+        "auth timeout 10,000 ms: the handshake must complete in time",
+        "command timeout 30,000 ms: the command fails, the session survives",
+        "keepalive interval 10,000 ms: one PING per interval while established",
+        "keepalive window 30,000 ms: no inbound frame means the session goes down"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Invariants",
+      "items": [
+        "Every valid inbound frame is a life sign, not just PONGs",
+        "A failed, timed-out, or cancelled command never poisons the session: the next command runs normally",
+        "Down is terminal: the agent redials with a fresh session"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "One Live Session Per Identity",
+      "items": [
+        "When an agent re-dials, the newest session wins",
+        "The superseded-but-connected session shows as stale until it disconnects",
+        "The visible registry state is derived at query time, never cached"
+      ]
+    }
+  ]
+}

@@ -37,3 +37,15 @@ report/*.pdf
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Diagram tooling scratch
+#
+# The diagram sources live in docs/diagrams/src and the rendered artefacts in
+# docs/diagrams; everything below is transient working state.
+.archify/
+.chrome-profile-*/
+.archify-delivery-lock.json
+docs/diagrams/.archify-delivery-lock.json
+docs/diagrams/assets/.chrome-profile-*/
+docs/diagrams/.evidence
+

@@ -77,7 +77,7 @@ public:
     void restart() override;
 };
 
-// Production sd-bus binding: dlopen("libsystemd.so.0") and resolve the four
+// Production sd-bus binding: dlopen("libsystemd.so.0") and resolve the six
 // sd_bus symbols the logind calls need. `available()` is the documented
 // degradation path: when the library, the system bus, or the login manager
 // is missing, the binding is unavailable and `power_off` raises the

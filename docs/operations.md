@@ -132,6 +132,9 @@ progress channel.
 
 | Symptom | Where it shows up | Cause | What to do |
 | --- | --- | --- | --- |
+| `error: command outcome unavailable (agent session lost)`, exit 1 | console stderr | The session was lost before the command reached a terminal state | The agent will redial; retry |
+| `error: command never reached a terminal outcome`, exit 1 | console stderr | The dispatch returned without a terminal status | The session is in an unexpected state; check the logs |
+| `error: audit setup failed: …`, exit 1 | console stderr | The audit store could not be opened or re-opened | Fix the `audit_path` — the console refuses to run unaudited |
 | `error: unknown verb '<x>'` | console stderr, exit 2 | The verb is not `agents`, `exec`, or `cancel` | Check the verb |
 | `error: unknown agent '<x>'`, exit 3 | console stderr | The agent had not registered within `agent_dial_wait_ms` | Start the agent first; or raise the budget |
 | `error: refusal: '<cmd>' … not confirmed`, exit 4 | console stderr | The console gate was not satisfied | Add `--yes` (and the literal `confirm` argument) |
@@ -141,13 +144,14 @@ progress channel.
 | `error: console setup failed: …`, exit 1 | console stderr | The config or the token store is bad | The message names the file and the field |
 | `error: dispatch failed: …`, exit 1 | console stderr | The transport failed | Check that the console can bind the port |
 | `refused: unknown agent identity '<x>'` | **console** log | The identity is not in the token store, or the token is empty | The names must match **exactly**. The agent's own log shows only the error *code*: `refused by console during handshake: auth_failed` |
-| `refused during handshake by peer: auth_failed` | **console** log | The agent's answer did not verify | The tokens differ, or the identity is unknown |
+| `refused during handshake by peer: auth_failed` | **console** log | The peer (the agent) sent an `ERR` while the console was still handshaking | A peer-side refusal during the handshake |
+| `refused: hmac does not verify with the provisioned token` | **console** log | The agent's answer did not verify | The tokens differ, or the identity is unknown. This is the usual console-side symptom of a token mismatch. |
 | The agent aborts with `refusing to dial out with an empty provisioned token` | agent stderr (uncaught exception) | The agent's `token` is empty | Provision the token. The `SessionError` is not caught by the agent's main loop, so the process terminates abnormally rather than exiting cleanly. |
 | `dial-out attempt failed` (repeated) | agent log | The console is unreachable | Check the address, the port, and the firewall |
 | `dial-out backed off` (repeated) | agent log | Normal — the console is not up yet | Expected while the console is down |
 | `session down; redialing` | agent log | The session dropped | Expected when the console restarts |
 | `refused: handshake did not complete within auth_timeout` | **console** log | The console did not answer the challenge in 10 s | Usually a clock or a very loaded machine. The agent's equivalent is `refused: console did not complete the handshake within auth_timeout`. |
-| `keepalive window elapsed without any life sign from the peer` | either log | The peer stopped responding for 30 s | A network or a load problem |
+| `keepalive window elapsed without any life sign from the peer` | **console** log | The peer stopped responding for 30 s | A network or a load problem. The agent's counterpart reads `keepalive window elapsed without any life sign from the console`. |
 | `no X display is reachable (is DISPLAY set?)` | command result | The Linux agent has no X server | Run the agent in a graphical session, or under Xvfb |
 | `'lock_keyboard' is unsupported in this environment` | command result | A Wayland-only host | The input family needs X11. The session stays usable. |
 | `the camera device could not be opened` | command result | No camera, or it is in use | — |

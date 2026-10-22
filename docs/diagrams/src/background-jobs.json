@@ -1,0 +1,266 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Managed background job lifecycle",
+    "subtitle": "Camera capture and the keylogger share one registry with one slot per family",
+    "output": "docs/diagrams/background-jobs.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "lanes": [
+    {
+      "id": "cli",
+      "label": "Operator console"
+    },
+    {
+      "id": "jobs",
+      "label": "Background job registry"
+    }
+  ],
+  "phases": [
+    {
+      "id": "seat",
+      "label": "Seat",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "run",
+      "label": "Run",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "deliver",
+      "label": "Deliver",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "start",
+    "slot",
+    "worker",
+    "publish",
+    "deliver"
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "lane": "cli",
+      "col": 0,
+      "type": "frontend",
+      "label": "start_webcam",
+      "sublabel": "or start_keylogger",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/matrix.cpp",
+          "line": 301,
+          "end_line": 334
+        }
+      ]
+    },
+    {
+      "id": "refuse",
+      "lane": "cli",
+      "col": 1,
+      "type": "security",
+      "label": "Refuse duplicate",
+      "sublabel": "already_running",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/camera.cpp",
+          "line": 156,
+          "end_line": 163
+        }
+      ]
+    },
+    {
+      "id": "slot",
+      "lane": "jobs",
+      "col": 1,
+      "type": "database",
+      "label": "Job slot",
+      "sublabel": "one named slot per family",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/jobs.hpp",
+          "line": 70,
+          "end_line": 114
+        }
+      ]
+    },
+    {
+      "id": "stop",
+      "lane": "cli",
+      "col": 2,
+      "type": "frontend",
+      "label": "stop_webcam",
+      "sublabel": "or stop_keylogger",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/matrix.cpp",
+          "line": 316,
+          "end_line": 334
+        }
+      ]
+    },
+    {
+      "id": "join",
+      "lane": "jobs",
+      "col": 2,
+      "type": "backend",
+      "label": "Signal and join",
+      "sublabel": "stop_requested()",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/jobs.cpp",
+          "line": 89,
+          "end_line": 113
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "lane": "jobs",
+      "col": 3,
+      "type": "cloud",
+      "label": "Worker thread",
+      "sublabel": "its own thread, bounded stop",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/camera.cpp",
+          "line": 131,
+          "end_line": 164
+        }
+      ]
+    },
+    {
+      "id": "publish",
+      "lane": "jobs",
+      "col": 4,
+      "type": "messagebus",
+      "label": "Publish deliverable",
+      "sublabel": "latest frame or capture",
+      "width": 130,
+      "sources": [
+        {
+          "path": "lib/syscalls/jobs.hpp",
+          "line": 46,
+          "end_line": 68
+        }
+      ]
+    },
+    {
+      "id": "deliver",
+      "lane": "cli",
+      "col": 5,
+      "type": "frontend",
+      "label": "Deliver file",
+      "sublabel": "webcam.png or the capture",
+      "width": 130,
+      "sources": [
+        {
+          "path": "agent/command_handler.cpp",
+          "line": 38,
+          "end_line": 73
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-start-slot",
+      "from": "start",
+      "to": "slot",
+      "role": "main",
+      "label": "registry.start"
+    },
+    {
+      "id": "e-start-refuse",
+      "from": "start",
+      "to": "refuse",
+      "role": "error",
+      "label": "slot occupied",
+      "variant": "security"
+    },
+    {
+      "id": "e-slot-worker",
+      "from": "slot",
+      "to": "worker",
+      "role": "main",
+      "label": "slot free"
+    },
+    {
+      "id": "e-worker-publish",
+      "from": "worker",
+      "to": "publish",
+      "role": "main"
+    },
+    {
+      "id": "e-publish-deliver",
+      "from": "publish",
+      "to": "deliver",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-stop-join",
+      "from": "stop",
+      "to": "join",
+      "role": "main",
+      "label": "registry.stop"
+    },
+    {
+      "id": "e-join-worker",
+      "from": "join",
+      "to": "worker",
+      "role": "branch",
+      "label": "stop flag",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Slot Rules",
+      "items": [
+        "A duplicate start is refused and the incumbent job is left untouched",
+        "A stop with nothing running is refused as not_running",
+        "The registry is shared process-wide, so the camera and input families never collide"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Threading",
+      "items": [
+        "The worker owns its capture loop and never takes the session's locks",
+        "Deliverables cross threads through the handle's mutex",
+        "The session stays responsive because the job lives in the syscall layer"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Honest Failures",
+      "items": [
+        "A job that produced nothing fails loudly instead of reporting an empty success",
+        "A camera that cannot be opened surfaces as a classified failure at stop time; an unopenable keylogger storage path is refused at start",
+        "The keylogger capture is a real zero-byte file when nothing was typed"
+      ]
+    }
+  ]
+}

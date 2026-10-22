@@ -10,24 +10,9 @@ design decisions that shaped the code.
 
 tether is **two runtimes and one protocol**.
 
-```
-   operator seat                          target machines
-┌────────────────────────┐              ┌──────────────────────────────┐
-│  tether-console        │◄─── dials ───│  tether-agent                │
-│                        │              │                              │
-│  one invocation        │  authenticated│  one long-running process    │
-│  = one verb            │   session    │  dials out forever           │
-│                        │              │                              │
-│  CLI11 parse           │              │  AgentSession                │
-│  → registry lookup     │              │  → CommandDispatcher         │
-│  → confirm gate        │              │  → 7 capability families     │
-│  → TcpOperConsole      │              │                              │
-│  → TcpConsoleTransport │              │  process · file · power      │
-│  → ConsoleSession      │              │  capture · camera · input    │
-│  → AgentRegistry       │              │  app                         │
-│  → AuditStore          │              │                              │
-└────────────────────────┘              └──────────────────────────────┘
-```
+![The two runtimes, the session between them, and the closed command set.](diagrams/assets/system-overview.png)
+
+*Interactive version: [system-overview.html](diagrams/system-overview.html).*
 
 **The agent dials out; nothing listens on the target.** The console binds one
 port and accepts the agent's outbound connection. This is the single most
@@ -46,30 +31,12 @@ agent's next dial to land.
 
 ## 2. Layers
 
-Six static libraries and two executables. Each layer only knows about the
-layer(s) beneath it.
+Six static libraries and two executables. Dependencies flow one way: a layer
+never reaches back up, and every edge is declared in CMake.
 
-```
-  tether-console (exe)          tether-agent (exe)
-        │                              │
-        ▼                              ▼
-  tether-cli                  tether-command-handler
-  (console/cli, tcp_console,  (agent/command_handler)
-   audit)                            │        │
-        │                            ▼        ▼
-        ▼                    tether-syscalls  tether-transport
-  tether-transport          (matrix + 7      (transport, tcp, gmail,
-  (transport, tcp, gmail,    families +       gmail_cpr)
-   gmail_cpr)                jobs)                 │
-        │                                           │
-        ▼                                           │
-  tether-protocol ◄─────────────────────────────────┘
-  (envelope, payloads, handshake, session, bytes)
-        │
-        ▼
-  tether-common
-  (config, logging, base64)
-```
+![The six static libraries and two executables, and the one direction their dependencies flow.](diagrams/assets/library-layers.png)
+
+*Interactive version: [library-layers.html](diagrams/library-layers.html).*
 
 `lib/syscalls` is deliberately self-contained: it includes no common, protocol,
 or transport header, so the command surface cannot reach the wire or the
@@ -96,59 +63,9 @@ directly — the diagram above shows the main flows, not every edge.
 
 This is the path a single `exec` takes, from argv to exit code.
 
-```
- 1. ARGV          tether-console --config c.json exec lab-1 ls /tmp
-                     │
- 2. PARSE          CLI11 parses the verb and the positionals.
-                   Leftover tokens are COMMAND ARGUMENTS (data), not flags.
-                     │
- 3. VERB GATE      Unknown verb → exit 2, before any config is read,
-                   any console is built, anything is audited.
-                     │
- 4. AUDIT STORE    Built before the console exists, so a later failure
-                   is still auditable.
-                     │
- 5. CONSOLE        TcpConsoleTransport::start() → bind → listen → accept.
-                   TcpOperConsole::set_agent_dial_budget_ms(config).
-                     │
- 6. DIAL-IN WAIT   TcpOperConsole::wait_for_dial() pumps the transport
-                   (io_context::poll + per-session pump) until the
-                   targeted identity registers, or the budget expires.
-                   Budget expiry collapses into the unknown-agent refusal.
-                     │
- 7. AGENT LOOKUP   has_agent(identity). Unknown → exit 3.
-                   This precedes the confirmation gate.
-                     │
- 8. CONFIRM GATE   Destructive verb (delete / shutdown / restart) without
-                   --yes and without a scripted "y" → exit 4.
-                   NOTHING IS SENT.
-                     │
- 9. DISPATCH       ConsoleSession::start(cmd) allocates a seq (from 1),
-                   records a tracker, sends the CMD frame.
-                     │
-10. WIRE           10-byte header + JSON payload. The agent's
-                   AgentSession receives it, registers the seq as
-                   in-flight, and invokes the command handler.
-                     │
-11. DISPATCHER     CommandDispatcher::dispatch(verb, args) runs the
-                   five-gate chain (see §4) and calls the family.
-                     │
-12. REPLY          The Outcome becomes wire pieces:
-                     - ok + small text  → RESULT_TEXT
-                     - ok + file        → FILE_META, FILE_CHUNK*, FILE_END
-                     - not ok            → ERR {code, message}
-                     │
-13. STREAM         stdout carries result bytes verbatim.
-                   stderr carries status and errors.
-                   File chunks are byte-exact; a short delivery is a
-                   failure, not a truncated success.
-                     │
-14. AUDIT          One "command" record (executed / refused / failed)
-                   plus any "job_event" records for background jobs.
-                     │
-15. EXIT           0 ok · 1 failure · 2 usage · 3 unknown agent
-                   4 refused confirmation
-```
+![Every step of one command, from argv to a streamed result, with each refusal point in place.](diagrams/assets/command-lifecycle.png)
+
+*Interactive version: [command-lifecycle.html](diagrams/command-lifecycle.html).*
 
 Two details worth internalising:
 
@@ -189,7 +106,7 @@ power family, `shutdown` refuses as `unsupported_platform` rather than
 `kCommandSet` in `lib/syscalls/matrix.cpp` is the closed set of 19 verbs across
 7 families. Each row is pure data:
 
-```cpp
+```
 struct CommandSpec {
     const char* verb;     // the wire command word
     Family family;        // Process | File | Power | Capture | Camera | App | Input
@@ -230,19 +147,9 @@ Two verbs — `start_webcam`/`stop_webcam` and `start_keylogger`/`stop_keylogger
 `BackgroundJobRegistry` (`lib/syscalls/jobs.hpp`) with one named slot per
 family (`"camera"`, `"input"`).
 
-```
-  start_webcam ──▶ registry.start("camera", worker)
-                     ├─ slot occupied? → already_running, incumbent untouched
-                     └─ slot free?     → worker on its OWN thread
-                                         │
-                                         ├─ publishes the latest frame
-                                         └─ checks stop_requested() between steps
-                                         │
-  stop_webcam  ──▶ registry.stop("camera")
-                     ├─ signal the worker
-                     ├─ join it
-                     └─ hand back the published deliverable
-```
+![How a background job is seated, run, stopped, and delivered.](diagrams/assets/background-jobs.png)
+
+*Interactive version: [background-jobs.html](diagrams/background-jobs.html).*
 
 The worker owns its capture loop and never takes the session's locks;
 deliverables cross threads through the handle's mutex. The session stays
@@ -258,15 +165,12 @@ successful empty deliverable.
 
 ## 7. The session state machines
 
-Both peers implement the same four-state model (`lib/protocol/session.hpp`):
+Both peers implement the same four-state model (`lib/protocol/session.hpp`),
+with one exception: `Stale` is console-side only.
 
-```
-        Connecting ─────────────► Established ─────────────► Down (terminal)
-             │                        │   ▲
-             │ handshake failed       │   │ new session for the same identity
-             ▼                        ▼   │
-           Down                    Stale  (console side only)
-```
+![The four session states and the transitions between them.](diagrams/assets/session-states.png)
+
+*Interactive version: [session-states.html](diagrams/session-states.html).*
 
 | State | Meaning |
 | --- | --- |
@@ -298,13 +202,9 @@ Two invariants the tests pin:
 The agent's own main thread does everything: connect, handshake, pump, dispatch.
 There is **no thread pool and no work queue**. The pump cadence is 10 ms.
 
-```
-  agent main thread
-    ├── establish_with_retries()   bounded backoff: 500 → 1000 → 2000 → 4000 → 8000 → 10000 ms (cap)
-    ├── link->begin_handshake(now)
-    ├── while (!down && !established) { pump(now); sleep 10 ms; }
-    └── while (established)           { pump(now); sleep 10 ms; }
-```
+![The agent main thread, and where background jobs add their own.](diagrams/assets/agent-thread-model.png)
+
+*Interactive version: [agent-thread-model.html](diagrams/agent-thread-model.html).*
 
 The backoff **resets on every successful connect**, so a flapping console
 produces 500 ms retries rather than a 10 s cadence.
@@ -333,7 +233,7 @@ accepted session. `TcpOperConsole` drives it from a 2 ms sleep loop.
 
 Both transports sit behind one interface (`lib/transport/transport.hpp`):
 
-```cpp
+```
 class ITransport {
 public:
     virtual std::uint32_t issue(const std::string& agent,
@@ -371,28 +271,9 @@ binary does not yet wire it in.
 
 ## 10. Authentication in one picture
 
-```
-  agent                                            console
-    │                                                 │
-    │  HELLO {agent_id, agent_name, protocol_version:2} │
-    │────────────────────────────────────────────────►│
-    │                                                 │  resolve the token
-    │                                                 │  → unknown identity?
-    │                                                 │    ERR auth_failed, go Down
-    │  CHALLENGE {nonce}                              │
-    │◄────────────────────────────────────────────────│
-    │                                                 │
-    │  decode nonce hex → 16 raw bytes                │
-    │  HMAC-SHA256(token, 16 raw bytes) → 32 bytes    │
-    │  CHALLENGE {nonce, hmac_response}               │
-    │────────────────────────────────────────────────►│
-    │                                                 │  recompute, compare
-    │                                                 │  in constant time
-    │  AUTH_OK {}                                     │
-    │◄────────────────────────────────────────────────│
-    │                                                 │
-    │  Established — commands may flow                 │
-```
+![The four frames of the HMAC challenge-response handshake.](diagrams/assets/handshake.png)
+
+*Interactive version: [handshake.html](diagrams/handshake.html).*
 
 The token **never crosses the wire** and is never logged. See
 [protocol.md](protocol.md) for the byte-level walkthrough and

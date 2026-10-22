@@ -48,6 +48,17 @@ describes behaviour, the behaviour is enforced by a test (see
 | [capture-notes.md](capture-notes.md) | Why the Linux capture family is own-library X11, with the benchmark that decided it (existing) |
 | [readiness-decisions.md](readiness-decisions.md) | Owner decisions and the allowed-use policy record (existing) |
 
+## Diagrams
+
+Every diagram is drawn as HTML and rasterised to PNG. Each one lives in
+`docs/diagrams/` as an interactive HTML artifact plus the inline PNG, and its
+authoring source is `docs/diagrams/src/<slug>.json`.
+
+| | |
+| --- | --- |
+| [diagrams/](diagrams/) | The rendered artefacts and the authoring sources. |
+| [scripts/diagrams/](../scripts/diagrams/) | The pipeline that renders and exports them: `node scripts/diagrams/build.mjs`. |
+
 ## Source of truth
 
 | Question | Authoritative source |
@@ -63,8 +74,9 @@ When a document and the code disagree, the code wins — and the document is a b
 
 ## Version
 
-This documentation set describes **tether 0.1.0** (protocol v2), at commit
-`0d2354c`. The build stamps `TETHER_VERSION="0.1.0"` into both binaries.
+This documentation set describes **tether 0.1.0** (protocol v2), matching the
+code state at commit `0d2354c` (the last commit before the documentation set
+was added). The build stamps `TETHER_VERSION="0.1.0"` into both binaries.
 
 ## Authorized use
 

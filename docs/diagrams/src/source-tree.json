@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "diagram_type": "tree",
+  "meta": {
+    "title": "Source tree",
+    "subtitle": "Two runtimes, four shared libraries, and the test suite that pins them",
+    "output": "docs/diagrams/source-tree.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "layout": {
+    "direction": "right"
+  },
+  "nodes": [
+    {
+      "id": "root",
+      "label": "tether",
+      "sublabel": "authorized-use remote administration lab tool",
+      "sources": [
+        {
+          "path": "CMakeLists.txt",
+          "line": 1,
+          "end_line": 35
+        }
+      ]
+    },
+    {
+      "id": "agent_dir",
+      "label": "agent/",
+      "parent": "root",
+      "sublabel": "the target-side runtime",
+      "sources": [
+        {
+          "path": "agent/main.cpp",
+          "line": 41,
+          "end_line": 152
+        }
+      ]
+    },
+    {
+      "id": "agent_main",
+      "label": "main.cpp",
+      "parent": "agent_dir",
+      "sublabel": "dial-out loop and dispatcher wiring",
+      "sources": [
+        {
+          "path": "agent/main.cpp",
+          "line": 87,
+          "end_line": 152
+        }
+      ]
+    },
+    {
+      "id": "agent_handler",
+      "label": "command_handler.cpp",
+      "parent": "agent_dir",
+      "sublabel": "Cmd frame to family call",
+      "sources": [
+        {
+          "path": "agent/command_handler.cpp",
+          "line": 38,
+          "end_line": 147
+        }
+      ]
+    },
+    {
+      "id": "console_dir",
+      "label": "console/",
+      "parent": "root",
+      "sublabel": "the operator-side runtime",
+      "sources": [
+        {
+          "path": "console/main.cpp",
+          "line": 41,
+          "end_line": 162
+        }
+      ]
+    },
+    {
+      "id": "console_main",
+      "label": "main.cpp",
+      "parent": "console_dir",
+      "sublabel": "config load and console factory",
+      "sources": [
+        {
+          "path": "console/main.cpp",
+          "line": 84,
+          "end_line": 162
+        }
+      ]
+    },
+    {
+      "id": "console_cli",
+      "label": "cli.cpp",
+      "parent": "console_dir",
+      "sublabel": "the verb surface: verbs, exit codes, confirm gate",
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 481,
+          "end_line": 578
+        },
+        {
+          "path": "console/cli.hpp",
+          "line": 44,
+          "end_line": 48
+        }
+      ]
+    },
+    {
+      "id": "console_tcp",
+      "label": "tcp_console.cpp",
+      "parent": "console_dir",
+      "sublabel": "pump loop and dial-in wait",
+      "sources": [
+        {
+          "path": "console/tcp_console.cpp",
+          "line": 16,
+          "end_line": 65
+        }
+      ]
+    },
+    {
+      "id": "console_audit",
+      "label": "audit.cpp",
+      "parent": "console_dir",
+      "sublabel": "the JSONL audit trail",
+      "sources": [
+        {
+          "path": "console/audit.cpp",
+          "line": 31,
+          "end_line": 254
+        }
+      ]
+    },
+    {
+      "id": "lib_dir",
+      "label": "lib/",
+      "parent": "root",
+      "sublabel": "four shared libraries",
+      "sources": [
+        {
+          "path": "CMakeLists.txt",
+          "line": 29,
+          "end_line": 35
+        }
+      ]
+    },
+    {
+      "id": "lib_common",
+      "label": "common/",
+      "parent": "lib_dir",
+      "sublabel": "config, logging, base64",
+      "sources": [
+        {
+          "path": "lib/common/CMakeLists.txt",
+          "line": 1,
+          "end_line": 3
+        }
+      ]
+    },
+    {
+      "id": "lib_protocol",
+      "label": "protocol/",
+      "parent": "lib_dir",
+      "sublabel": "envelope, payloads, handshake, session",
+      "sources": [
+        {
+          "path": "lib/protocol/CMakeLists.txt",
+          "line": 1,
+          "end_line": 16
+        }
+      ]
+    },
+    {
+      "id": "lib_transport",
+      "label": "transport/",
+      "parent": "lib_dir",
+      "sublabel": "the transport seam, tcp, gmail",
+      "sources": [
+        {
+          "path": "lib/transport/CMakeLists.txt",
+          "line": 1,
+          "end_line": 14
+        }
+      ]
+    },
+    {
+      "id": "lib_syscalls",
+      "label": "syscalls/",
+      "parent": "lib_dir",
+      "sublabel": "the matrix and the seven families",
+      "sources": [
+        {
+          "path": "lib/syscalls/CMakeLists.txt",
+          "line": 1,
+          "end_line": 39
+        }
+      ]
+    },
+    {
+      "id": "tests_dir",
+      "label": "tests/",
+      "parent": "root",
+      "sublabel": "27 doctest suites, 240 cases",
+      "sources": [
+        {
+          "path": "tests/CMakeLists.txt",
+          "line": 1,
+          "end_line": 226
+        }
+      ]
+    },
+    {
+      "id": "tests_proto",
+      "label": "protocol suites",
+      "parent": "tests_dir",
+      "sublabel": "envelope, payloads, handshake, session",
+      "sources": [
+        {
+          "path": "tests/CMakeLists.txt",
+          "line": 13,
+          "end_line": 31
+        }
+      ]
+    },
+    {
+      "id": "tests_families",
+      "label": "family suites",
+      "parent": "tests_dir",
+      "sublabel": "one per capability family",
+      "sources": [
+        {
+          "path": "tests/CMakeLists.txt",
+          "line": 79,
+          "end_line": 151
+        }
+      ]
+    },
+    {
+      "id": "tests_e2e",
+      "label": "families_e2e_test.cpp",
+      "parent": "tests_dir",
+      "sublabel": "every family over real loopback",
+      "sources": [
+        {
+          "path": "tests/CMakeLists.txt",
+          "line": 160,
+          "end_line": 200
+        }
+      ]
+    },
+    {
+      "id": "docs_dir",
+      "label": "docs/",
+      "parent": "root",
+      "sublabel": "this documentation set",
+      "collapsed": true,
+      "sources": [
+        {
+          "path": "docs/README.md",
+          "line": 1,
+          "end_line": 78
+        }
+      ]
+    },
+    {
+      "id": "scripts_dir",
+      "label": "scripts/",
+      "parent": "root",
+      "sublabel": "the narrated demo",
+      "collapsed": true,
+      "sources": [
+        {
+          "path": "scripts/demo.sh",
+          "line": 1,
+          "end_line": 81
+        }
+      ]
+    },
+    {
+      "id": "openspec_dir",
+      "label": "openspec/",
+      "parent": "root",
+      "sublabel": "the change history",
+      "collapsed": true,
+      "sources": [
+        {
+          "path": "openspec/changes/tether-v2-reset/proposal.md",
+          "line": 1,
+          "end_line": 30
+        }
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Reading Order",
+      "items": [
+        "lib/protocol owns the wire and knows nothing about the command set",
+        "lib/syscalls owns the command set and knows nothing about the wire",
+        "console and agent are thin: they wire the layers together"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Test Layout",
+      "items": [
+        "One doctest translation unit per area, so a failing assert pins one suite",
+        "Suites use in-memory pipes or loopback sockets, and exercise the real disk, child-process, and display paths where they can",
+        "The end-to-end suite is split into eleven per-case ctest partitions"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "One command, end to end",
+    "subtitle": "From argv to a streamed result, with every refusal point in between",
+    "output": "docs/diagrams/command-lifecycle.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "lanes": [
+    {
+      "id": "console",
+      "label": "Operator console"
+    },
+    {
+      "id": "agent",
+      "label": "Agent runtime"
+    },
+    {
+      "id": "evidence",
+      "label": "Evidence"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "Intake",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "execute",
+      "label": "Execute",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "report",
+      "label": "Report",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "parse",
+    "gate",
+    "dispatch",
+    "recv",
+    "matrix",
+    "family"
+  ],
+  "nodes": [
+    {
+      "id": "parse",
+      "lane": "console",
+      "col": 0,
+      "type": "external",
+      "label": "Parse argv",
+      "sublabel": "CLI11: verb plus data args",
+      "width": 132,
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 481,
+          "end_line": 529
+        }
+      ]
+    },
+    {
+      "id": "gate",
+      "lane": "console",
+      "col": 1,
+      "type": "security",
+      "label": "Lookup and confirm",
+      "sublabel": "unknown agent -> exit 3",
+      "width": 132,
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 286,
+          "end_line": 312
+        }
+      ]
+    },
+    {
+      "id": "dispatch",
+      "lane": "console",
+      "col": 2,
+      "type": "frontend",
+      "label": "Dispatch",
+      "sublabel": "allocate seq, send CMD",
+      "width": 132,
+      "sources": [
+        {
+          "path": "lib/protocol/session.cpp",
+          "line": 262,
+          "end_line": 278
+        }
+      ]
+    },
+    {
+      "id": "recv",
+      "lane": "agent",
+      "col": 3,
+      "type": "backend",
+      "label": "AgentSession",
+      "sublabel": "registers the in-flight seq",
+      "width": 132,
+      "sources": [
+        {
+          "path": "lib/protocol/session.cpp",
+          "line": 533,
+          "end_line": 549
+        }
+      ]
+    },
+    {
+      "id": "matrix",
+      "lane": "agent",
+      "col": 4,
+      "type": "backend",
+      "label": "Capability matrix",
+      "sublabel": "closed set + gates",
+      "width": 150,
+      "sources": [
+        {
+          "path": "lib/syscalls/matrix.cpp",
+          "line": 557,
+          "end_line": 671
+        }
+      ]
+    },
+    {
+      "id": "family",
+      "lane": "agent",
+      "col": 5,
+      "type": "cloud",
+      "label": "Family call",
+      "sublabel": "argv only, never a shell",
+      "width": 132,
+      "sources": [
+        {
+          "path": "lib/syscalls/process.cpp",
+          "line": 332,
+          "end_line": 365
+        },
+        {
+          "path": "lib/syscalls/process.cpp",
+          "line": 146,
+          "end_line": 175
+        }
+      ]
+    },
+    {
+      "id": "stream",
+      "lane": "console",
+      "col": 4,
+      "type": "frontend",
+      "label": "Stream result",
+      "sublabel": "stdout bytes, stderr status",
+      "width": 132,
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 151,
+          "end_line": 181
+        }
+      ]
+    },
+    {
+      "id": "audit",
+      "lane": "evidence",
+      "col": 5,
+      "type": "database",
+      "label": "Audit record",
+      "sublabel": "JSONL, one per attempt",
+      "width": 132,
+      "sources": [
+        {
+          "path": "console/audit.cpp",
+          "line": 31,
+          "end_line": 46
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-parse-gate",
+      "from": "parse",
+      "to": "gate",
+      "role": "main"
+    },
+    {
+      "id": "e-gate-dispatch",
+      "from": "gate",
+      "to": "dispatch",
+      "role": "main",
+      "label": "dispatch"
+    },
+    {
+      "id": "e-dispatch-recv",
+      "from": "dispatch",
+      "to": "recv",
+      "role": "main",
+      "label": "CMD frame (seq N)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-recv-matrix",
+      "from": "recv",
+      "to": "matrix",
+      "role": "main"
+    },
+    {
+      "id": "e-matrix-family",
+      "from": "matrix",
+      "to": "family",
+      "role": "main"
+    },
+    {
+      "id": "e-family-stream",
+      "from": "family",
+      "to": "stream",
+      "role": "return",
+      "label": "result pieces",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-stream-audit",
+      "from": "stream",
+      "to": "audit",
+      "role": "main",
+      "label": "executed / refused / failed",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Console Side",
+      "items": [
+        "Unknown verb fails with exit 2 before any config is read",
+        "Unknown agent fails with exit 3 before any dispatch",
+        "An unconfirmed destructive command fails with exit 4 and nothing is sent"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Agent Side",
+      "items": [
+        "Four refusals run in order - closed set, matrix row, family wired, confirm token - then the family executes",
+        "A refusal returns a structured code and the session stays usable",
+        "Arguments reach the family as literal argv data"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Result Shapes",
+      "items": [
+        "Text results ride one RESULT_TEXT frame",
+        "File results ride FILE_META, FILE_CHUNK and FILE_END",
+        "An empty listing rides the file channel, because empty text is rejected at decode"
+      ]
+    }
+  ]
+}

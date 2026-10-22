@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Trust boundaries",
+    "subtitle": "Where the secret stops and the untrusted zone begins",
+    "output": "docs/diagrams/trust-boundaries.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "components": [
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "Operator",
+      "sublabel": "the human at the seat",
+      "pos": [
+        30,
+        215
+      ],
+      "size": [
+        120,
+        58
+      ]
+    },
+    {
+      "id": "console",
+      "type": "frontend",
+      "label": "tether-console",
+      "sublabel": "verb parsing, confirm gate",
+      "pos": [
+        200,
+        215
+      ],
+      "size": [
+        165,
+        62
+      ],
+      "sources": [
+        {
+          "path": "console/cli.cpp",
+          "line": 481,
+          "end_line": 529
+        }
+      ]
+    },
+    {
+      "id": "tokens",
+      "type": "security",
+      "label": "Token store",
+      "sublabel": "the shared secret",
+      "pos": [
+        200,
+        80
+      ],
+      "size": [
+        165,
+        58
+      ],
+      "sources": [
+        {
+          "path": "console/main.cpp",
+          "line": 57,
+          "end_line": 80
+        }
+      ]
+    },
+    {
+      "id": "audit",
+      "type": "database",
+      "label": "Audit trail",
+      "sublabel": "JSONL, operator storage",
+      "pos": [
+        200,
+        350
+      ],
+      "size": [
+        165,
+        58
+      ],
+      "sources": [
+        {
+          "path": "console/audit.cpp",
+          "line": 31,
+          "end_line": 46
+        }
+      ]
+    },
+    {
+      "id": "network",
+      "type": "messagebus",
+      "label": "Untrusted network",
+      "sublabel": "plaintext TCP",
+      "pos": [
+        420,
+        215
+      ],
+      "size": [
+        165,
+        62
+      ],
+      "sources": [
+        {
+          "path": "lib/transport/tcp.cpp",
+          "line": 141,
+          "end_line": 210
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "tether-agent",
+      "sublabel": "dial-out client",
+      "pos": [
+        640,
+        215
+      ],
+      "size": [
+        165,
+        62
+      ],
+      "sources": [
+        {
+          "path": "agent/main.cpp",
+          "line": 110,
+          "end_line": 151
+        }
+      ]
+    },
+    {
+      "id": "families",
+      "type": "cloud",
+      "label": "Capability families",
+      "sublabel": "argv only, no shell",
+      "pos": [
+        640,
+        350
+      ],
+      "size": [
+        165,
+        58
+      ],
+      "sources": [
+        {
+          "path": "lib/syscalls/matrix.cpp",
+          "line": 27,
+          "end_line": 61
+        }
+      ]
+    },
+    {
+      "id": "os",
+      "type": "cloud",
+      "label": "Operating system",
+      "sublabel": "the managed machine",
+      "pos": [
+        860,
+        350
+      ],
+      "size": [
+        135,
+        58
+      ],
+      "sources": [
+        {
+          "path": "lib/syscalls/process.cpp",
+          "line": 146,
+          "end_line": 175
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Operator seat",
+      "wraps": [
+        "console",
+        "tokens",
+        "audit"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "Target machine",
+      "wraps": [
+        "agent",
+        "families",
+        "os"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "c-invoke",
+      "from": "operator",
+      "to": "console",
+      "label": "verb",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c-token",
+      "from": "console",
+      "to": "tokens",
+      "label": "reads token",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "c-audit",
+      "from": "console",
+      "to": "audit",
+      "label": "writes record",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "c-cmd",
+      "from": "console",
+      "to": "network",
+      "label": "CMD frame"
+    },
+    {
+      "id": "c-dial",
+      "from": "agent",
+      "to": "network",
+      "label": "dial out",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "c-reply",
+      "from": "network",
+      "to": "console",
+      "label": "result",
+      "fromSide": "top",
+      "toSide": "top"
+    },
+    {
+      "id": "c-dispatch",
+      "from": "agent",
+      "to": "families",
+      "label": "dispatch",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "c-os",
+      "from": "families",
+      "to": "os",
+      "label": "argv only"
+    },
+    {
+      "id": "c-deliver",
+      "from": "network",
+      "to": "agent",
+      "label": "deliver"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "What Never Crosses",
+      "items": [
+        "The pre-shared token stays on both sides of the boundary",
+        "The console authenticates the agent with an HMAC challenge",
+        "The agent does not authenticate the console: it trusts what it dialled"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "What Does Cross, In Clear",
+      "items": [
+        "Command traffic and results travel as plaintext TCP",
+        "Screenshots and keylog captures are visible to anything on the path",
+        "Use a trusted segment or a tunnel if the network is not trusted"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Operator-Side Storage",
+      "items": [
+        "The token store and the Gmail credentials live outside the repository",
+        "The audit trail is append-only by convention, not by enforcement",
+        "Protect the token store with filesystem permissions"
+      ]
+    }
+  ]
+}

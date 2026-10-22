@@ -15,7 +15,7 @@ CI uses it.
 | Test cases | **240** `TEST_CASE` registrations at source level |
 | CTest entries | **37** (26 suites + 11 per-case e2e partitions) |
 | Helper executables | 2 (`tether-argv-probe`, `tether-capture-bench`) |
-| Sleeps | **none** — time is injected everywhere it matters |
+| Sleeps | **none in the protocol layer**, and only one bounded sleep site in the transport layer (the dial-out backoff, exercised by the loopback suite with a 1–2 ms policy). Everything else is injected time. The test binaries themselves sleep only inside bounded poll loops (see §4). |
 
 The rule the suite follows, stated in `tests/CMakeLists.txt`:
 
@@ -224,7 +224,7 @@ strategy:
 | Linux extras | `libx11-dev`, `xvfb`, `ccache` installed explicitly |
 | Cache layer 1 | `ccache` on the repo's own translation units (Linux only) |
 | Cache layer 2 | the vcpkg **binary cache**, keyed on `hashFiles('vcpkg.json')` |
-| Test run | `xvfb-run -a ctest ... --parallel N --output-junit test-results.xml` (Linux); plain `ctest` (Windows) |
+| Test run | `xvfb-run -a ctest ... --parallel N --output-junit test-results.xml` (Linux); the same `ctest` invocation without the `xvfb-run` wrapper (Windows) |
 | Artifacts | `test-results.xml` uploaded as a JUnit artifact, always |
 | Cache hygiene | `ccache --cleanup` and `--show-stats` before the cache is archived |
 

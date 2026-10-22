@@ -1,0 +1,283 @@
+{
+  "schema_version": 1,
+  "diagram_type": "tree",
+  "meta": {
+    "title": "Configuration artefacts",
+    "subtitle": "Four JSON files, every key, and where it has to live",
+    "output": "docs/diagrams/config-layout.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "provider": "github",
+      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "link_mode": "web"
+    }
+  },
+  "layout": {
+    "direction": "right"
+  },
+  "nodes": [
+    {
+      "id": "cfg",
+      "label": "tether configuration",
+      "sublabel": "four JSON artefacts, no secrets in the tree",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 1,
+          "end_line": 16
+        }
+      ]
+    },
+    {
+      "id": "console_cfg",
+      "label": "console.json",
+      "parent": "cfg",
+      "sublabel": "operator side",
+      "sources": [
+        {
+          "path": "docs/examples/console.example.json",
+          "line": 1,
+          "end_line": 8
+        }
+      ]
+    },
+    {
+      "id": "c_listen",
+      "label": "listen_address",
+      "parent": "console_cfg",
+      "sublabel": "required",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 38,
+          "end_line": 64
+        }
+      ]
+    },
+    {
+      "id": "c_port",
+      "label": "port",
+      "parent": "console_cfg",
+      "sublabel": "required, 1-65535",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 38,
+          "end_line": 64
+        }
+      ]
+    },
+    {
+      "id": "c_store",
+      "label": "token_store_path",
+      "parent": "console_cfg",
+      "sublabel": "required",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 38,
+          "end_line": 64
+        }
+      ]
+    },
+    {
+      "id": "c_audit",
+      "label": "audit_path",
+      "parent": "console_cfg",
+      "sublabel": "optional, off by default",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 38,
+          "end_line": 64
+        }
+      ]
+    },
+    {
+      "id": "c_wait",
+      "label": "agent_dial_wait_ms",
+      "parent": "console_cfg",
+      "sublabel": "optional, 10000",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 38,
+          "end_line": 64
+        }
+      ]
+    },
+    {
+      "id": "c_gmail",
+      "label": "gmail",
+      "parent": "console_cfg",
+      "sublabel": "optional, off by default",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 30,
+          "end_line": 36
+        }
+      ]
+    },
+    {
+      "id": "agent_cfg",
+      "label": "agent.json",
+      "parent": "cfg",
+      "sublabel": "target side",
+      "sources": [
+        {
+          "path": "docs/examples/agent.example.json",
+          "line": 1,
+          "end_line": 7
+        }
+      ]
+    },
+    {
+      "id": "a_addr",
+      "label": "console_address",
+      "parent": "agent_cfg",
+      "sublabel": "required",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 66,
+          "end_line": 79
+        }
+      ]
+    },
+    {
+      "id": "a_port",
+      "label": "console_port",
+      "parent": "agent_cfg",
+      "sublabel": "optional, 47474",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 66,
+          "end_line": 79
+        }
+      ]
+    },
+    {
+      "id": "a_name",
+      "label": "agent_name",
+      "parent": "agent_cfg",
+      "sublabel": "required",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 66,
+          "end_line": 79
+        }
+      ]
+    },
+    {
+      "id": "a_inst",
+      "label": "instance_id",
+      "parent": "agent_cfg",
+      "sublabel": "optional, defaults to agent_name",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 66,
+          "end_line": 79
+        }
+      ]
+    },
+    {
+      "id": "a_token",
+      "label": "token",
+      "parent": "agent_cfg",
+      "sublabel": "required, must match the store",
+      "sources": [
+        {
+          "path": "lib/common/config.hpp",
+          "line": 66,
+          "end_line": 79
+        }
+      ]
+    },
+    {
+      "id": "tokens_cfg",
+      "label": "tokens.json",
+      "parent": "cfg",
+      "sublabel": "the shared secret",
+      "sources": [
+        {
+          "path": "docs/examples/tokens.example.json",
+          "line": 1,
+          "end_line": 3
+        }
+      ]
+    },
+    {
+      "id": "t_map",
+      "label": "\"<identity>\": \"<token>\"",
+      "parent": "tokens_cfg",
+      "sublabel": "one entry per agent",
+      "sources": [
+        {
+          "path": "console/main.cpp",
+          "line": 57,
+          "end_line": 80
+        }
+      ]
+    },
+    {
+      "id": "gmail_cfg",
+      "label": "gmail credentials file",
+      "parent": "cfg",
+      "sublabel": "outside the repository",
+      "sources": [
+        {
+          "path": "lib/transport/gmail.hpp",
+          "line": 59,
+          "end_line": 68
+        }
+      ]
+    },
+    {
+      "id": "g_creds",
+      "label": "account, client_id, client_secret, refresh_token",
+      "parent": "gmail_cfg",
+      "sublabel": "every field a non-empty string",
+      "sources": [
+        {
+          "path": "lib/transport/gmail.hpp",
+          "line": 59,
+          "end_line": 68
+        }
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Loading Rules",
+      "items": [
+        "Every problem is an explicit failure naming the file and the field",
+        "The loaders never substitute silent defaults for a malformed file",
+        "A missing console config falls back to localhost, an ephemeral port, and no token store"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Where the Secrets Live",
+      "items": [
+        "The token store holds the pre-shared token per agent identity",
+        "The Gmail credentials file holds the OAuth refresh token",
+        "Both live at operator-chosen paths outside the repository; protect them with file permissions"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "The Shared Secret",
+      "items": [
+        "The agent's token and the console's token store must agree exactly",
+        "The identity in the store must match agent_name exactly",
+        "The shipped console parses the gmail section but does not yet construct the adapter"
+      ]
+    }
+  ]
+}

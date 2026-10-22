@@ -319,7 +319,7 @@ JSON encoding is equally wire-acceptable):
 | Frame assembly across arbitrary feed slices       | envelope-test “decoder assembles frames across arbitrary feed slices” |
 | Truncation at end-of-stream                       | envelope-test truncation cases (incl. hot-pipe consumption) |
 | Per-type bounds (1 MiB control / 256 KiB chunk)   | envelope-test oversize/boundary cases          |
-| Poison on unknown ver/type                        | envelope-test “unknown version/type is rejected and poisons the stream” |
+| Poison on unknown ver/type                        | envelope-test "unknown version is rejected and poisons the stream" + "unknown type is rejected both below and above the enum range" |
 | Full uint32 seq domain                            | envelope-test “seq accepts the full uint32 range” |
 | HELLO strict shape + version match                | payloads-test HELLO cases                      |
 | CHALLENGE 32-hex nonce; 64-hex answer shape       | payloads-test CHALLENGE cases                  |

@@ -7,34 +7,9 @@ recipes for the changes you are most likely to make.
 
 ## 1. Source tree
 
-```
-.
-├── CMakeLists.txt              root build: C++17, warnings, subdirectory order
-├── vcpkg.json                  the dependency manifest (the only dependency source)
-├── README.md                   the project front door
-├── agent/                      the TARGET-side runtime
-│   ├── main.cpp                startup, dispatcher wiring, dial-out loop
-│   ├── command_handler.cpp     Cmd frame → family call → reply pieces
-│   └── command_handler.hpp
-├── console/                    the OPERATOR-side runtime
-│   ├── main.cpp                config load, audit store, console factory
-│   ├── cli.cpp                 verbs, exit codes, confirmation gate, stdio
-│   ├── cli.hpp
-│   ├── tcp_console.cpp         the pump loop and the dial-in wait
-│   ├── tcp_console.hpp
-│   ├── audit.cpp               the JSONL audit store and its query API
-│   └── audit.hpp
-├── lib/
-│   ├── common/                 config, logging, base64
-│   ├── protocol/               envelope, payloads, handshake, session, bytes
-│   ├── transport/              transport interface, tcp, gmail
-│   └── syscalls/               the matrix, the 7 families, the job registry
-├── tests/                      27 doctest suites + 2 helper executables
-├── docs/                       this documentation set
-├── scripts/                    the narrated demo
-├── openspec/                   the change history: proposals, specs, design, tasks
-└── .github/workflows/ci.yml    the two-leg CI
-```
+![Where each part of the project lives.](diagrams/assets/source-tree.png)
+
+*Interactive version: [source-tree.html](diagrams/source-tree.html).*
 
 ### Line counts by area
 
@@ -151,7 +126,7 @@ Every header starts with a `//` comment block that says **what the file is
 for and which requirement it serves** — usually naming the task or the spec
 delta. Example (`lib/syscalls/jobs.hpp`):
 
-```cpp
+```
 // lib/syscalls/jobs.hpp - the shared managed background-job lifecycle
 // (remote-commands delta: "background jobs have a managed lifecycle"; task
 // 6.6 binds it as SHARED so the 6.7 keylogger family plugs into the same
@@ -195,16 +170,16 @@ The code uses comments to record **why**, not **what**. A comment that
 restates the next line is noise; a comment that explains a decision, a
 constraint, or a trap is load-bearing. Examples from the tree:
 
-```cpp
+```
 // D4: HMAC over the RAW nonce bytes (the 16 decoded bytes), not their hex
 // representation; keyed with the provisioned token.
 ```
 
-```cpp
+```
 // without a handler, Xlib's default one PRINTS and TERMINATES the process
 ```
 
-```cpp
+```
 // The dispatcher outlives every link, so install is safe across redials
 ```
 
@@ -264,7 +239,7 @@ This touches four files. Do them in this order.
 
 **Step 1 — extend the matrix** (`lib/syscalls/matrix.cpp`, `kCommandSet`):
 
-```cpp
+```
 {"my_verb", Family::File, false, true, true},
 ```
 
