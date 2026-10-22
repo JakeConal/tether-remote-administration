@@ -361,7 +361,7 @@ Before opening a pull request:
 
 ## 6. Where the requirements live
 
-The authoritative requirement set is in `openspec/changes/tether-v2-reset/`:
+The authoritative requirement set is in `openspec/changes/archive/2026-10-22-tether-v2-reset/`:
 
 | File | Contents |
 | --- | --- |
@@ -394,9 +394,11 @@ The loop:
 5. **Archive** — move the change into `openspec/changes/archive/`.
 
 The `openspec-*-change` skills drive these steps. The `openspec/changes/archive/`
-directory is where a finished change is moved to; it currently holds only a
-`.gitkeep`, so `openspec/changes/tether-v2-reset/` is the one worked example
-of a change's shape.
+directory is where a finished change is moved to; it currently holds one
+archived change, `openspec/changes/archive/2026-10-22-tether-v2-reset/`, which
+is the worked example of a change's shape. Its delta specs were synced into
+the main specs under `openspec/specs/` (`secure-session`, `command-transport`,
+`remote-commands`, `operator-console`) when it was archived.
 
 ---
 

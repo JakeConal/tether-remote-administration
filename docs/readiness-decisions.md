@@ -1,7 +1,7 @@
 # Readiness decisions and allowed-use policy record
 
 This file records the public-repo readiness decisions that tether's design
-(`openspec/changes/tether-v2-reset/design.md`, "Open Questions") left to the
+(`openspec/changes/archive/2026-10-22-tether-v2-reset/design.md`, "Open Questions") left to the
 project owner, together with the owner's sign-off, and the results of the
 allowed-use policy verification. Decided in the task 7.3 sign-off round,
 2026-10-21 (owner sign-off given interactively this session).

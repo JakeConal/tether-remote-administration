@@ -235,7 +235,7 @@ Summary of the last verification (2026-10-21):
 | Retired v1 admin addresses | **None** in the tracked tree (they survive only in git history, behind the `v1.0-final` tag). |
 | `admin.txt` | No such **file** exists. The literal appears only in prose: inside `openspec/**` describing its retirement, and inside this documentation set and `docs/readiness-decisions.md` quoting the record. |
 | Credential-shaped strings | Only OAuth *field names* and fabricated test values. Real credentials live at operator-configured paths outside the repo. |
-| Hardcoded port `12345` | Not hardcoded in source. The literal appears only in prose: `openspec/changes/tether-v2-reset/design.md` and `docs/readiness-decisions.md`, describing v1's retired port. The agent's default dial port 47474 is a config-file default, not source wiring. |
+| Hardcoded port `12345` | Not hardcoded in source. The literal appears only in prose: `openspec/changes/archive/2026-10-22-tether-v2-reset/design.md` and `docs/readiness-decisions.md`, describing v1's retired port. The agent's default dial port 47474 is a config-file default, not source wiring. |
 | High-entropy literals | The RFC 4231 HMAC vector, the base64 alphabets, and fabricated test tokens — no secrets. |
 
 **Any tree change that reintroduces a literal address or a secret is a policy

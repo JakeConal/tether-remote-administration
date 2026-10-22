@@ -152,7 +152,8 @@ start there for the reading paths that match what you are trying to do.
 | [docs/capture-notes.md](docs/capture-notes.md) | why the Linux capture family is own-lib X11, with the benchmark that decided it |
 | [docs/readiness-decisions.md](docs/readiness-decisions.md) | owner decisions and the allowed-use policy record |
 | [scripts/demo.md](scripts/demo.md) | the narrated end-to-end session (real binaries, real protocol) and its transcript |
-| `openspec/` | the change history: proposal, capability specs (`secure-session`, `command-transport`, `remote-commands`, `operator-console`), design, and phase-by-phase tasks |
+| `openspec/specs/` | the main capability specs (`secure-session`, `command-transport`, `remote-commands`, `operator-console`) |
+| `openspec/changes/archive/` | the change history: proposal, design, phase-by-phase tasks, and the delta specs each change carried |
 
 ## Quality
 
