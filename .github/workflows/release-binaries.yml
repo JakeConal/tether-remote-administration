@@ -27,6 +27,12 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
 
+      - name: Check out current release package files
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: release-package-source
+
       - name: Prepare vcpkg binary cache directory
         shell: pwsh
         run: New-Item -ItemType Directory -Force -Path vcpkg-bincache | Out-Null
@@ -64,7 +70,11 @@ jobs:
           Copy-Item build/console/Release/tether-console.exe $stage
           Get-ChildItem build/agent/Release -Filter *.dll | Copy-Item -Destination $stage
           Get-ChildItem build/console/Release -Filter *.dll | Copy-Item -Destination $stage
-          Copy-Item agent.example.json, console.example.json, README.md, LICENSE $stage
+          Copy-Item release-package-source/.github/release-package/README.md $stage
+          Copy-Item release-package-source/.github/release-package/agent.json $stage
+          Copy-Item release-package-source/.github/release-package/console.json $stage
+          Copy-Item release-package-source/.github/release-package/tokens.json $stage
+          Copy-Item LICENSE $stage
 
           Compress-Archive -Path "$stage/*" -DestinationPath "$packageName.zip"
           "PACKAGE_NAME=$packageName" >> $env:GITHUB_ENV
@@ -97,6 +107,12 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
 
+      - name: Check out current release package files
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: release-package-source
+
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libx11-dev xvfb
 
@@ -127,7 +143,11 @@ jobs:
           package_name="tether-$RELEASE_TAG-linux-x64"
           mkdir "$package_name"
           cp build/agent/tether-agent build/console/tether-console "$package_name/"
-          cp agent.example.json console.example.json README.md LICENSE "$package_name/"
+          cp release-package-source/.github/release-package/README.md "$package_name/"
+          cp release-package-source/.github/release-package/agent.json "$package_name/"
+          cp release-package-source/.github/release-package/console.json "$package_name/"
+          cp release-package-source/.github/release-package/tokens.json "$package_name/"
+          cp LICENSE "$package_name/"
           chmod +x "$package_name/tether-agent" "$package_name/tether-console"
           tar -czf "$package_name.tar.gz" "$package_name"
           echo "PACKAGE_NAME=$package_name" >> "$GITHUB_ENV"

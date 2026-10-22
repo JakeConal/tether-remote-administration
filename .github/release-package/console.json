@@ -1,0 +1,8 @@
+{
+  "listen_address": "127.0.0.1",
+  "port": 47474,
+  "token_store_path": "tokens.json",
+  "agent_dial_wait_ms": 15000,
+  "gmail": null
+}
+
