@@ -1,0 +1,10 @@
+# Normalize line endings.
+#
+# Every text file is stored with LF endings in the repository and checked out
+# with LF endings, on every platform. This keeps the working tree free of
+# spurious "modified" entries that only differ by CRLF/LF, and it keeps
+# shell scripts (scripts/demo.sh, CI workflows) executable as-is.
+#
+# Binary files (PNGs under docs/diagrams/assets) are detected automatically by
+# git and are left untouched.
+* text=auto eol=lf
