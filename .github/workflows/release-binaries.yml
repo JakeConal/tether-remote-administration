@@ -81,3 +81,65 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$RELEASE_TAG" "$PACKAGE_NAME.zip" --clobber
+
+  linux:
+    name: Build and publish Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BUILD_TYPE: Release
+      RELEASE_TAG: ${{ inputs.tag }}
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libx11-dev xvfb
+
+      - name: Prepare vcpkg binary cache directory
+        run: mkdir -p vcpkg-bincache
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-linux-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-bin-linux-
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build --config $BUILD_TYPE --parallel
+
+      - name: Test
+        run: xvfb-run -a ctest --test-dir build --output-on-failure -C $BUILD_TYPE --parallel 4
+
+      - name: Package executables
+        run: |
+          package_name="tether-$RELEASE_TAG-linux-x64"
+          mkdir "$package_name"
+          cp build/agent/tether-agent build/console/tether-console "$package_name/"
+          cp agent.example.json console.example.json README.md LICENSE "$package_name/"
+          chmod +x "$package_name/tether-agent" "$package_name/tether-console"
+          tar -czf "$package_name.tar.gz" "$package_name"
+          echo "PACKAGE_NAME=$package_name" >> "$GITHUB_ENV"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: ${{ env.PACKAGE_NAME }}.tar.gz
+          if-no-files-found: error
+
+      - name: Attach package to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "$PACKAGE_NAME.tar.gz" --clobber
