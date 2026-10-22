@@ -1,0 +1,79 @@
+name: Release binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and upload
+        required: true
+        default: v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Build and publish Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      BUILD_TYPE: Release
+      RELEASE_TAG: ${{ inputs.tag }}
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-bin-windows-
+
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config $BUILD_TYPE --parallel
+
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build --output-on-failure -C $BUILD_TYPE --parallel 2
+
+      - name: Package executables and runtime dependencies
+        shell: pwsh
+        run: |
+          $packageName = "tether-$env:RELEASE_TAG-windows-x64"
+          $stage = Join-Path $PWD $packageName
+          New-Item -ItemType Directory -Path $stage | Out-Null
+
+          Copy-Item build/agent/Release/tether-agent.exe $stage
+          Copy-Item build/console/Release/tether-console.exe $stage
+          Get-ChildItem build/agent/Release -Filter *.dll | Copy-Item -Destination $stage
+          Get-ChildItem build/console/Release -Filter *.dll | Copy-Item -Destination $stage
+          Copy-Item agent.example.json, console.example.json, README.md, LICENSE $stage
+
+          Compress-Archive -Path "$stage/*" -DestinationPath "$packageName.zip"
+          "PACKAGE_NAME=$packageName" >> $env:GITHUB_ENV
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: ${{ env.PACKAGE_NAME }}.zip
+          if-no-files-found: error
+
+      - name: Attach package to GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "$PACKAGE_NAME.zip" --clobber
