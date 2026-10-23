@@ -163,7 +163,7 @@ std::string HealthSnapshot::json() const {
         out += ",\"cpu_percent_avg\":";
         append_double(out, *cpu_percent_avg);
         out += ",\"cpu_percent_max\":";
-        append_double(out, *cpu_percent_max.value_or(0.0));
+        append_double(out, cpu_percent_max.value_or(0.0));
     }
     if (memory_used_max.has_value()) {
         out += ",\"memory_used_max\":";
@@ -224,10 +224,10 @@ std::uint32_t count_toolhelp_entries(DWORD snapshot_flags) {
     } else {
         THREADENTRY32 entry{};
         entry.dwSize = sizeof(entry);
-        if (Thread32FirstW(snapshot, &entry)) {
+        if (Thread32First(snapshot, &entry)) {
             do {
                 ++count;
-            } while (Thread32NextW(snapshot, &entry));
+            } while (Thread32Next(snapshot, &entry));
         }
     }
     CloseHandle(snapshot);
