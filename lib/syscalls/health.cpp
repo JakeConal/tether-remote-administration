@@ -3,6 +3,8 @@
 // snapshot JSON builder; see the header for the contracts.
 #include "health.hpp"
 
+#include "errors.hpp"
+
 #include <algorithm>
 #include <sstream>
 #include <utility>
