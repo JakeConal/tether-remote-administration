@@ -15,6 +15,9 @@ add_library(tether-syscalls STATIC
     input.cpp
     # Task 6.8: the app family (Start-menu .lnk / .desktop entries).
     app.cpp
+    # add-health-telemetry: the health sampler engine (pure rolling-window
+    # math; the OS probes plug in from phase 3, the cadence from phase 5).
+    health.cpp
     # The shared managed background-job lifecycle (camera today; the 6.7
     # keylogger plugs into the same registry).
     jobs.cpp)

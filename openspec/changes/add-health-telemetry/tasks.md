@@ -2,18 +2,18 @@
 
 ## 1. Telemetry configuration
 
-- [ ] 1.1 Extend `AgentConfig` in `lib/common/config.{hpp,cpp}` with an optional `telemetry` section (`interval_s` default 1, `window_s` default 60); reject `interval_s < 1`, `window_s < interval_s`, wrong types, and unknown keys with `ConfigError` naming the field; add loader cases to `tests/config_test.cpp` (valid defaults, absent section, each invalid case)
-- [ ] 1.2 Add the section to `agent.example.json` and `docs/examples/agent.example.json`, and document the keys in `docs/configuration.md`; verify the examples load with `load_agent_config` in `tests/config_test.cpp`
+- [x] 1.1 Extend `AgentConfig` in `lib/common/config.{hpp,cpp}` with an optional `telemetry` section (`interval_s` default 1, `window_s` default 60); reject `interval_s < 1`, `window_s < interval_s`, wrong types, and unknown keys with `ConfigError` naming the field; add loader cases to `tests/config_test.cpp` (valid defaults, absent section, each invalid case)
+- [x] 1.2 Add the section to `agent.example.json` and `docs/examples/agent.example.json`, and document the keys in `docs/configuration.md`; verify the examples load with `load_agent_config` in `tests/config_test.cpp`
 
 ## 2. Health sampler engine (pure, testable)
 
-- [ ] 2.1 Add `HealthState` (window storage, uptime/reconnect counters, staleness bookkeeping, aggregate math) in `lib/syscalls/health.hpp` with an injected clock; unit tests in `tests/health_test.cpp` pin: window fill/drain over fake ticks, first tick is baseline-only (no fabricated CPU), aggregates (cpu avg/max, mem max) over the configured span, sample age grows honestly when ticks are delayed
-- [ ] 2.2 Verify the snapshot JSON builder emits the design D5 field set in one line: parse every documented key in `tests/health_test.cpp` (latest, window, uptime_seconds, reconnects, sample_age_ms, interval_s)
+- [x] 2.1 Add `HealthState` (window storage, uptime/reconnect counters, staleness bookkeeping, aggregate math) in `lib/syscalls/health.hpp` with an injected clock; unit tests in `tests/health_test.cpp` pin: window fill/drain over fake ticks, first tick is baseline-only (no fabricated CPU), aggregates (cpu avg/max, mem max) over the configured span, sample age grows honestly when ticks are delayed
+- [x] 2.2 Verify the snapshot JSON builder emits the design D5 field set in one line: parse every documented key in `tests/health_test.cpp` (latest, window, uptime_seconds, reconnects, sample_age_ms, interval_s)
 
 ## 3. OS probes
 
-- [ ] 3.1 Implement `IHealthHostProbe` for Windows (`GetSystemTimes` delta, `GlobalMemoryStatusEx`, Toolhelp process/thread snapshots) and add a smoke test to `tests/health_test.cpp` asserting plausible ranges (cpu in [0,100], total >= used, positives) on the Windows build
-- [ ] 3.2 Implement `IHealthHostProbe` for Linux (`/proc/stat` delta, `/proc/meminfo`, `/proc/loadavg` threads, `/proc` walk for processes) with the same plausible-range smoke test on the Linux build
+- [x] 3.1 Implement `IHealthHostProbe` for Windows (`GetSystemTimes` delta, `GlobalMemoryStatusEx`, Toolhelp process/thread snapshots) and add a smoke test to `tests/health_test.cpp` asserting plausible ranges (cpu in [0,100], total >= used, positives) on the Windows build
+- [x] 3.2 Implement `IHealthHostProbe` for Linux (`/proc/stat` delta, `/proc/meminfo`, `/proc/loadavg` threads, `/proc` walk for processes) with the same plausible-range smoke test on the Linux build
 
 ## 4. The `health` command surface
 

@@ -6,6 +6,14 @@ add_executable(tether-config-tests config_test.cpp)
 target_link_libraries(tether-config-tests PRIVATE doctest::doctest tether-common)
 add_test(NAME config-test COMMAND tether-config-tests)
 
+# add-health-telemetry (tasks 2.1/2.2): the pure sampler engine - window
+# fill/drain, baseline-only first tick, honest aggregates/staleness, and the
+# single-line snapshot JSON shape. nlohmann rides the test side only.
+add_executable(tether-health-tests health_test.cpp)
+target_link_libraries(tether-health-tests
+    PRIVATE doctest::doctest tether-syscalls nlohmann_json::nlohmann_json)
+add_test(NAME health-test COMMAND tether-health-tests)
+
 add_executable(tether-logging-tests logging_test.cpp)
 target_link_libraries(tether-logging-tests PRIVATE doctest::doctest tether-common)
 add_test(NAME logging-test COMMAND tether-logging-tests)
@@ -206,7 +214,7 @@ add_test(NAME families-e2e-unknown COMMAND
 # Nothing in this repo runs anywhere near minutes: the budgets inside the
 # suites stay in the 1-15 s band and whole ctest runs finish inside 2 min.
 set_tests_properties(
-    smoke config-test logging-test envelope-test payloads-test
+    smoke config-test health-test logging-test envelope-test payloads-test
     handshake-test session-test base64-test tcp-loopback-test gmail-test
     transport-equiv-test registry-test cli-verb-test cli-stream-test
     cli-confirm-test cli-integration-test matrix-test process-family-test
