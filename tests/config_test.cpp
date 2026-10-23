@@ -371,3 +371,139 @@ TEST_CASE("agent instance_id is optional and loads when present") {
         CHECK(config.instance_id == "host-lab-01");
     }
 }
+
+// ---- add-health-telemetry (phase 1): agent telemetry sampling section ----
+
+TEST_CASE("agent telemetry section defaults when absent or explicit null") {
+    {
+        const std::string path = write_config("agent-telemetry-absent.json", kValidAgent);
+        const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+        CHECK(config.telemetry.interval_s == 1);
+        CHECK(config.telemetry.window_s == 60);
+    }
+    {
+        const std::string path = write_config("agent-telemetry-null.json", R"json({
+          "console_address": "127.0.0.1",
+          "agent_name": "agent-lab-1",
+          "token": "example-token",
+          "telemetry": null
+        })json");
+        const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+        CHECK(config.telemetry.interval_s == 1);
+        CHECK(config.telemetry.window_s == 60);
+    }
+}
+
+TEST_CASE("agent telemetry section loads explicit values") {
+    const std::string path = write_config("agent-telemetry-explicit.json", R"json({
+      "console_address": "127.0.0.1",
+      "agent_name": "agent-lab-1",
+      "token": "example-token",
+      "telemetry": { "interval_s": 2, "window_s": 120 }
+    })json");
+    const tether::common::AgentConfig config = tether::common::load_agent_config(path);
+    CHECK(config.telemetry.interval_s == 2);
+    CHECK(config.telemetry.window_s == 120);
+}
+
+TEST_CASE("agent telemetry section rejects every invalid shape, naming the field") {
+    auto expect_error = [&](std::string_view name, std::string_view text,
+                            std::string_view needle) {
+        const std::string path = write_config(name, text);
+        const std::string message = load_error_message_agent(path);
+        REQUIRE_MESSAGE(!message.empty(), "config ", name, " loaded without error");
+        CHECK_MESSAGE(message.find(needle) != std::string::npos, "config ", name,
+                      " rejected with: ", message);
+        CHECK(message.find(name) != std::string::npos); // the file is named too
+    };
+
+    // interval below the one-second floor
+    expect_error("telemetry-interval-zero.json",
+                 R"json({
+                   "console_address": "127.0.0.1",
+                   "agent_name": "agent-lab-1",
+                   "token": "example-token",
+                   "telemetry": { "interval_s": 0, "window_s": 60 }
+                 })json",
+                 "'telemetry.interval_s'");
+    // non-integer intervals and windows alike are wrong types
+    for (const char* bad : {"1.5", "true", "\"once\""}) {
+        const std::string text = std::string(R"json({
+          "console_address": "127.0.0.1",
+          "agent_name": "agent-lab-1",
+          "token": "example-token",
+          "telemetry": { "interval_s": )json") + bad + R"json( }
+        })json";
+        const std::string path = write_config("telemetry-interval-type.json", text);
+        const std::string message = load_error_message_agent(path);
+        CHECK_MESSAGE(!message.empty(), "telemetry.interval_s value ", bad, " loaded");
+        CHECK_MESSAGE(message.find("telemetry.interval_s") != std::string::npos,
+                      "offending value: ", bad);
+    }
+    // the window may not be shorter than the interval
+    expect_error("telemetry-window-short.json",
+                 R"json({
+                   "console_address": "127.0.0.1",
+                   "agent_name": "agent-lab-1",
+                   "token": "example-token",
+                   "telemetry": { "interval_s": 5, "window_s": 4 }
+                 })json",
+                 "'telemetry.window_s'");
+    // unknown keys are rejected, not silently ignored (strict shape, design D9)
+    expect_error("telemetry-unknown-key.json",
+                 R"json({
+                   "console_address": "127.0.0.1",
+                   "agent_name": "agent-lab-1",
+                   "token": "example-token",
+                   "telemetry": { "interval_s": 1, "window_s": 60, "cpu_only": true }
+                 })json",
+                 "unknown field 'telemetry.cpu_only'");
+    // the section itself must be an object
+    expect_error("telemetry-section-type.json",
+                 R"json({
+                   "console_address": "127.0.0.1",
+                   "agent_name": "agent-lab-1",
+                   "token": "example-token",
+                   "telemetry": "always"
+                 })json",
+                 "'telemetry'");
+}
+
+TEST_CASE("shipped agent example configs load with their telemetry section") {
+    // Example files live at the repo root and under docs/examples; tests may
+    // run from a build directory anywhere inside the tree, so walk upwards
+    // until the repo marker file is found.
+    const std::filesystem::path marker = "agent.example.json";
+    std::filesystem::path dir = std::filesystem::current_path();
+    std::filesystem::path example;
+    for (int hops = 0; hops < 10; ++hops) {
+        const std::filesystem::path candidate = dir / marker;
+        if (std::filesystem::exists(candidate)) {
+            example = candidate;
+            break;
+        }
+        const std::filesystem::path parent = dir.parent_path();
+        if (parent.empty() || parent == dir) {
+            break;
+        }
+        dir = parent;
+    }
+    REQUIRE_MESSAGE(!example.empty(), "agent.example.json not found above ",
+                    std::filesystem::current_path().string());
+
+    {
+        const tether::common::AgentConfig config =
+            tether::common::load_agent_config(example.string());
+        CHECK(config.telemetry.interval_s == 1);
+        CHECK(config.telemetry.window_s == 60);
+    }
+    {
+        const std::filesystem::path docs_example = example.parent_path() /
+                                                   "docs" / "examples" / marker;
+        REQUIRE(std::filesystem::exists(docs_example));
+        const tether::common::AgentConfig config =
+            tether::common::load_agent_config(docs_example.string());
+        CHECK(config.telemetry.interval_s == 1);
+        CHECK(config.telemetry.window_s == 60);
+    }
+}

@@ -75,7 +75,8 @@ Parsed by `load_agent_config()` (`lib/common/config.cpp`).
     "console_port": 47474,
     "agent_name": "lab-1",
     "instance_id": "lab-1",
-    "token": "..."
+    "token": "...",
+    "telemetry": { "interval_s": 1, "window_s": 60 }
 }
 ```
 
@@ -88,6 +89,29 @@ Template: [`docs/examples/agent.example.json`](examples/agent.example.json).
 | `agent_name` | string | **yes** | — | The registry identity. The console addresses the agent by exactly this string. |
 | `instance_id` | string | no | `agent_name` | The install-specific instance id carried in `HELLO`. |
 | `token` | string | **yes** (may be empty) | — | The pre-shared token for the HMAC handshake. |
+| `telemetry` | object | no | `{ interval_s: 1, window_s: 60 }` | Health sampling cadence; see the section below. |
+
+### The `telemetry` section
+
+Health sampling is **always on** — there is no toggle, only a cadence. The
+section is optional: an absent (or explicit `null`) section keeps the
+structural defaults `interval_s: 1`, `window_s: 60`, so older agent configs
+load unchanged.
+
+There are exactly two keys, and the loader rejects anything else:
+
+| Key | Constraint | Meaning |
+| --- | --- | --- |
+| `interval_s` | whole seconds, **≥ 1** | Seconds between host health samples (CPU, memory, process/thread counts). |
+| `window_s` | whole seconds, **≥ `interval_s`** | The rolling history the sampler keeps, so a snapshot can answer "what happened recently" as well as "what is happening now". |
+
+Rejection messages name the offending field:
+`telemetry.interval_s` at least a whole second, `telemetry.window_s`
+at least `telemetry.interval_s` seconds, `must be an integer` for wrong
+types, `unknown field 'telemetry.<key>'` for unknown keys, and
+`must be an object` when the section itself is malformed. Since sampling
+rides the agent's existing main-thread pump (no new thread), a smaller
+interval only tightens the cadence of already-cheap work.
 
 ### The `token` field
 

@@ -63,6 +63,18 @@ struct ConsoleConfig {
     int agent_dial_wait_ms = 10000;
 };
 
+// Health telemetry sampling controls (add-health-telemetry, design D9).
+// The sampling window is always-on: the section is optional in the config
+// file and the loader materializes these defaults when it is absent, so the
+// agent reads the effective cadence straight off the struct.
+// - interval_s: whole seconds between host health samples (>= 1)
+// - window_s:   whole seconds of rolling history the sampler keeps
+//               (>= interval_s)
+struct TelemetryConfig {
+    int interval_s = 1;
+    int window_s = 60;
+};
+
 // Fields for the agent (target side), see docs: agent.example.json.
 // - console_address: address the agent dials out to (design D1)
 // - console_port:    optional dial-out port (absent -> the default 47474,
@@ -70,12 +82,15 @@ struct ConsoleConfig {
 // - agent_name:      the agent's unique registry identity
 // - instance_id:     optional install instance id (defaults to agent_name)
 // - token:           pre-shared token for the HMAC handshake (design D4)
+// - telemetry:       optional health sampling section (add-health-telemetry);
+//                    absent -> structural defaults (TelemetryConfig{})
 struct AgentConfig {
     std::string console_address;
     int console_port = 47474;
     std::string agent_name;
     std::string instance_id;
     std::string token;
+    TelemetryConfig telemetry;
 };
 
 // Thrown for every configuration problem. The message always names the file,

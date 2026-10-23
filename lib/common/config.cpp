@@ -127,6 +127,46 @@ GmailSectionConfig parse_gmail_section(const json& doc, const std::string& path)
     return gmail;
 }
 
+// Health sampling section (add-health-telemetry, design D9). Only called for
+// a section the document actually contains (absence keeps the structural
+// defaults). An explicit null behaves the same way, while a present section
+// must be an object whose every key is known, with whole-second integer
+// values where interval_s >= 1 and window_s >= interval_s.
+TelemetryConfig parse_telemetry_section(const json& section, const std::string& path) {
+    if (section.is_null()) {
+        return TelemetryConfig{}; // explicit null behaves like absence (defaults)
+    }
+    if (!section.is_object()) {
+        throw ConfigError(path + ": field 'telemetry' must be an object");
+    }
+    TelemetryConfig telemetry;
+    const std::string telemetry_path = path + ":telemetry";
+    for (const auto& entry : section.items()) {
+        const std::string& key = entry.key();
+        if (key != "interval_s" && key != "window_s") {
+            throw ConfigError(telemetry_path + ": unknown field 'telemetry." + key + "'");
+        }
+        const json& value = entry.value();
+        if (!value.is_number_integer()) {
+            throw ConfigError(telemetry_path + ": field 'telemetry." + key + "' must be an integer");
+        }
+        if (key == "interval_s") {
+            telemetry.interval_s = value.get<int>();
+        } else {
+            telemetry.window_s = value.get<int>();
+        }
+    }
+    if (telemetry.interval_s < 1) {
+        throw ConfigError(
+            telemetry_path + ": field 'telemetry.interval_s' must be at least a whole second");
+    }
+    if (telemetry.window_s < telemetry.interval_s) {
+        throw ConfigError(telemetry_path + ": field 'telemetry.window_s' must be at least "
+                                         "'telemetry.interval_s' seconds of rolling history");
+    }
+    return telemetry;
+}
+
 } // namespace
 
 ConsoleConfig load_console_config(const std::string& path) {
@@ -181,6 +221,11 @@ AgentConfig load_agent_config(const std::string& path) {
     config.token = required_string(doc, path, "token");
     if (doc.find("instance_id") != doc.end() && doc.at("instance_id").is_string()) {
         config.instance_id = doc.at("instance_id").get<std::string>();
+    }
+    // Additive (add-health-telemetry): the always-on sampling cadence. An
+    // absent or explicit-null section keeps the structural defaults.
+    if (const auto telemetry = doc.find("telemetry"); telemetry != doc.end()) {
+        config.telemetry = parse_telemetry_section(*telemetry, path);
     }
     return config;
 }

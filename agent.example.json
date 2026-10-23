@@ -3,5 +3,6 @@
   "console_port": 47474,
   "agent_name": "agent-lab-1",
   "instance_id": "host-lab-01",
-  "token": ""
+  "token": "",
+  "telemetry": { "interval_s": 1, "window_s": 60 }
 }
