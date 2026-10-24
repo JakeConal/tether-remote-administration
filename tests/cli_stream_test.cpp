@@ -13,6 +13,8 @@
 
 #include "cli.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -35,6 +37,8 @@ struct StreamingFake final : tc::IOperConsole {
     std::vector<tp::Message> pieces;
     tp::CommandView view;
     std::vector<std::string> dispatched;
+    int health_polls = 0;
+    int stop_after_health_polls = 0;
 
     std::vector<tp::RegistryEntry> list_agents() override { return rows; }
     bool has_agent(const std::string& identity) override {
@@ -45,9 +49,16 @@ struct StreamingFake final : tc::IOperConsole {
         }
         return false;
     }
-    std::optional<tp::CommandView> dispatch(const std::string& agent, const tp::Cmd&,
+    bool is_live(const std::string& identity) override { return has_agent(identity); }
+    std::optional<tp::CommandView> dispatch(const std::string& agent, const tp::Cmd& command,
                                             const tp::ResultHook& hook) override {
         dispatched.push_back(agent);
+        if (command.command == "health") {
+            ++health_polls;
+            if (stop_after_health_polls > 0 && health_polls >= stop_after_health_polls) {
+                tc::request_monitor_stop();
+            }
+        }
         for (const tp::Message& piece : pieces) {
             hook(7, piece, false);
         }
@@ -63,6 +74,9 @@ struct Forwarder final : tc::IOperConsole {
     explicit Forwarder(StreamingFake& t) : target(&t) {}
     std::vector<tp::RegistryEntry> list_agents() override { return target->list_agents(); }
     bool has_agent(const std::string& identity) override { return target->has_agent(identity); }
+    void pump() override {}
+    bool is_live(const std::string& identity) override { return target->is_live(identity); }
+    tc::LinkTelemetry link_telemetry() override { return target->link_telemetry(); }
     std::optional<tp::CommandView> dispatch(const std::string& agent, const tp::Cmd& command,
                                             const tp::ResultHook& hook) override {
         return target->dispatch(agent, command, hook);
@@ -243,4 +257,101 @@ TEST_CASE("a failed file command never fakes completion") {
     const RunResult result = drive(fake, out, false, g_dir_counter);
     CHECK(result.exit_code == tc::kExitFailure);
     CHECK(result.err.find("error: command failed: delivery_failed") != std::string::npos);
+}
+
+namespace {
+
+constexpr const char* kStreamHealthSnapshot =
+    R"({"uptime_seconds":42,"reconnects":1,"latest":{"cpu_percent":12.5,)"
+    R"("memory_used":1073741824,"memory_total":8589934592,"processes":123,)"
+    R"("threads":456,"sampled_at_ms":1000},"window":{"span_seconds":60,"ticks":10,)"
+    R"("cpu_percent_avg":11.0,"cpu_percent_max":13.0,"memory_used_max":1073741824,)"
+    R"("window_coverage":0.5},"sample_age_ms":250,"interval_s":1})";
+
+tp::CommandView completed_health() {
+    tp::CommandView view;
+    view.seq = 7;
+    view.status = tp::CommandStatus::Completed;
+    view.command = "health";
+    return view;
+}
+
+} // namespace
+
+TEST_CASE("monitor emits JSONL observations on stdout and status on stderr") {
+    StreamingFake fake;
+    fake.rows = {{"agent-1", tp::RegistryState::Live}};
+    fake.pieces = {tp::ResultText{kStreamHealthSnapshot}};
+    fake.view = completed_health();
+    fake.stop_after_health_polls = 2;
+
+    std::ostringstream out;
+    std::ostringstream err;
+    std::istringstream in;
+    const int status = tc::run_cli(
+        {"tether-console", "monitor", "agent-1", "--json"},
+        tc::CliStreams{out, err, in, /*stdout_is_tty=*/false, /*stdin_is_tty=*/false},
+        [&fake](const std::string&) {
+            return std::unique_ptr<tc::IOperConsole>(new Forwarder(fake));
+        },
+        nullptr, tc::MonitorOptions{1});
+    CHECK(status == tc::kExitOk);
+    CHECK(fake.health_polls == 2);
+
+    // One self-contained JSON object per observation line: a piped consumer
+    // can parse every line without any surrounding status noise.
+    std::istringstream lines(out.str());
+    std::string line;
+    int count = 0;
+    while (std::getline(lines, line)) {
+        REQUIRE_FALSE(line.empty());
+        const nlohmann::json document = nlohmann::json::parse(line);
+        CHECK(document.at("agent") == "agent-1");
+        CHECK(document.at("status") == "ok");
+        CHECK(document.contains("health"));
+        CHECK(document.at("health").at("latest").at("cpu_percent") == 12.5);
+        CHECK(document.contains("console"));
+        CHECK(document.at("console").at("reconnects_observed") == 0);
+        ++count;
+    }
+    CHECK(count == 2);
+
+    CHECK(err.str().find("status: monitoring 'agent-1'") != std::string::npos);
+    CHECK(err.str().find("status: agent 'agent-1' is live") != std::string::npos);
+    CHECK(out.str().find("status:") == std::string::npos);
+    CHECK(err.str().find("\"status\"") == std::string::npos);
+}
+
+TEST_CASE("monitor's human shape stays one glanceable line per interval") {
+    StreamingFake fake;
+    fake.rows = {{"agent-1", tp::RegistryState::Live}};
+    fake.pieces = {tp::ResultText{kStreamHealthSnapshot}};
+    fake.view = completed_health();
+    fake.stop_after_health_polls = 1;
+
+    std::ostringstream out;
+    std::ostringstream err;
+    std::istringstream in;
+    const int status = tc::run_cli(
+        {"tether-console", "monitor", "agent-1"},
+        tc::CliStreams{out, err, in, /*stdout_is_tty=*/true, /*stdin_is_tty=*/false},
+        [&fake](const std::string&) {
+            return std::unique_ptr<tc::IOperConsole>(new Forwarder(fake));
+        },
+        nullptr, tc::MonitorOptions{1});
+    CHECK(status == tc::kExitOk);
+
+    const std::string observation = out.str();
+    CHECK(observation.find("agent-1 cpu=12.5%") == 0);
+    CHECK(observation.find("mem=1.0GiB/8.0GiB") != std::string::npos);
+    CHECK(observation.find("proc=123") != std::string::npos);
+    CHECK(observation.find("thr=456") != std::string::npos);
+    CHECK(observation.find("age=250ms") != std::string::npos);
+    CHECK(observation.find("win=10/60s") != std::string::npos);
+    CHECK(observation.find("poll=") != std::string::npos);
+    CHECK(observation.find("net=") != std::string::npos);
+    CHECK(observation.find("link_up=") != std::string::npos);
+    CHECK(observation.find("link_reconnects=0") != std::string::npos);
+    CHECK(observation.find('\n') == observation.size() - 1); // exactly one line
+    CHECK(observation.find("status:") == std::string::npos);
 }

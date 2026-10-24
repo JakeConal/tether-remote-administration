@@ -10,15 +10,28 @@
 //    nothing sent;
 //  - all errors print `error: ...` on stderr; progress prints `status: ...`
 //    on stderr; stdout carries result content only.
+//  - monitor (add-health-telemetry task 6.1-6.3): a long-lived observe loop
+//    that emits exactly one observation per cadence on stdout, keeps status
+//    on stderr, presents the target as unavailable while it has no live
+//    session (no deadline on the dial-in), and exits 0 on a cooperative
+//    interrupt. Its internal health polls never reach the audit emit point;
+//    one invocation record covers the whole run (task 6.5).
 #include "cli.hpp"
 
 #include <CLI/CLI.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cmath>
+#include <csignal>
+#include <cstdint>
+#include <iomanip>
+#include <optional>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 namespace tether::cli {
@@ -30,6 +43,31 @@ namespace {
 // names the families shutdown/restart and the file family list/delete/move/
 // copy, whence `delete` as the deletion command word).
 constexpr const char* kDestructiveCommands[] = {"shutdown", "restart", "delete"};
+
+// The verb the monitor polls. Its argument contract is fixed (no args): the
+// agent's telemetry family refuses anything else with invalid_args.
+constexpr const char* kHealthCommand = "health";
+
+// Cooperative interrupt plumbing (design D6): the handler only assigns this
+// flag; the observe loop checks it between observations and exits 0. The flag
+// is deliberately a signal-safe sig_atomic_t, not a lock or condition
+// variable, so nothing in a signal handler can allocate or block.
+volatile std::sig_atomic_t g_monitor_stop = 0;
+
+void monitor_signal_handler(int) {
+    g_monitor_stop = 1;
+}
+
+bool monitor_stop_requested() noexcept {
+    return g_monitor_stop != 0;
+}
+
+void install_monitor_signal_handlers() {
+    std::signal(SIGINT, monitor_signal_handler);
+#if defined(SIGBREAK)
+    std::signal(SIGBREAK, monitor_signal_handler);
+#endif
+}
 
 // ---- audit helpers (task 6.9) -------------------------------------------------
 
@@ -98,6 +136,180 @@ void record_job_event(const std::shared_ptr<AuditStore>& audit, const std::strin
     record.job = job;
     record.delivered = delivered;
     audit_append(*audit, record);
+}
+
+// ---- monitor rendering (tasks 6.2/6.3) ---------------------------------------
+
+// One invocation-level record (task 6.5). Nothing else in the monitor path
+// calls the audit helpers: the internal health polls are deliberately not
+// operator commands.
+void record_monitor(const std::shared_ptr<AuditStore>& audit, const std::string& agent,
+                    std::int64_t duration_ms, const std::string& outcome,
+                    const std::string& end_state, std::uint64_t observations,
+                    std::uint64_t reconnects_observed, const std::string& note = {}) {
+    if (!audit) {
+        return;
+    }
+    audit_append(*audit,
+                 make_monitor_record(agent, wall_now_ms(), duration_ms, outcome, end_state,
+                                     observations, reconnects_observed, note));
+}
+
+std::string sanitize_one_line(std::string text) {
+    for (char& c : text) {
+        if (c == '\n' || c == '\r') {
+            c = ' ';
+        }
+    }
+    return text;
+}
+
+std::string format_bytes(std::uint64_t bytes) {
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(1);
+    if (bytes >= (std::uint64_t{1} << 30)) {
+        out << static_cast<double>(bytes) / static_cast<double>(std::uint64_t{1} << 30) << "GiB";
+    } else if (bytes >= (std::uint64_t{1} << 20)) {
+        out << static_cast<double>(bytes) / static_cast<double>(std::uint64_t{1} << 20) << "MiB";
+    } else if (bytes >= (std::uint64_t{1} << 10)) {
+        out << static_cast<double>(bytes) / static_cast<double>(std::uint64_t{1} << 10) << "KiB";
+    } else {
+        out << bytes << "B";
+    }
+    return out.str();
+}
+
+std::string format_rate(double bytes_per_second) {
+    if (!(bytes_per_second > 0.0) || !std::isfinite(bytes_per_second)) {
+        return "0B/s";
+    }
+    return format_bytes(static_cast<std::uint64_t>(bytes_per_second)) + "/s";
+}
+
+std::string format_duration(std::int64_t milliseconds) {
+    const std::int64_t clamped = std::max<std::int64_t>(0, milliseconds);
+    std::ostringstream out;
+    if (clamped >= 1000) {
+        out << std::fixed << std::setprecision(1) << (static_cast<double>(clamped) / 1000.0)
+            << "s";
+    } else {
+        out << clamped << "ms";
+    }
+    return out.str();
+}
+
+std::optional<nlohmann::json> parse_health_snapshot(const std::string& text) {
+    try {
+        nlohmann::json document = nlohmann::json::parse(text);
+        if (!document.is_object()) {
+            return std::nullopt;
+        }
+        return document;
+    } catch (const nlohmann::json::exception&) {
+        return std::nullopt;
+    }
+}
+
+struct MonitorObservation {
+    std::string agent;
+    std::string status; // "ok" | "unavailable" | "error"
+    std::optional<nlohmann::json> health;
+    std::string error_code;
+    std::string error_detail;
+    LinkTelemetry link;
+    std::int64_t connection_uptime_ms = 0;
+    std::uint64_t reconnects_observed = 0;
+    std::uint64_t observations = 0;
+};
+
+std::string render_human_observation(const MonitorObservation& observation) {
+    std::ostringstream line;
+    line << observation.agent;
+    if (observation.status == "unavailable") {
+        line << " unavailable";
+    } else if (observation.status == "error") {
+        line << " error " << observation.error_code;
+        if (!observation.error_detail.empty()) {
+            line << " (" << sanitize_one_line(observation.error_detail) << ")";
+        }
+    } else {
+        const nlohmann::json& health = *observation.health;
+        const auto latest_it = health.find("latest");
+        if (latest_it != health.end() && latest_it->is_object()) {
+            const nlohmann::json& latest = *latest_it;
+            line << " cpu=";
+            const auto cpu_it = latest.find("cpu_percent");
+            if (cpu_it != latest.end() && cpu_it->is_number()) {
+                line << std::fixed << std::setprecision(1) << cpu_it->get<double>() << "%";
+            } else {
+                line << "--"; // baseline-only first tick: no fabricated 0%
+            }
+            line << " mem=" << format_bytes(latest.value("memory_used", std::uint64_t{0})) << "/"
+                 << format_bytes(latest.value("memory_total", std::uint64_t{0}));
+            line << " proc=" << latest.value("processes", std::uint32_t{0});
+            line << " thr=" << latest.value("threads", std::uint32_t{0});
+        } else {
+            line << " cpu=-- mem=--/-- proc=-- thr=--";
+        }
+        line << " age=" << format_duration(health.value("sample_age_ms", std::int64_t{0}));
+        const auto window_it = health.find("window");
+        if (window_it != health.end() && window_it->is_object()) {
+            const nlohmann::json& window = *window_it;
+            line << " win=" << window.value("ticks", std::size_t{0}) << "/"
+                 << window.value("span_seconds", 0) << "s";
+            const double coverage = window.value("window_coverage", 0.0);
+            line << " cov=" << std::fixed << std::setprecision(1) << (coverage * 100.0) << "%";
+        } else {
+            line << " win=--";
+        }
+    }
+    line << " poll="
+         << (observation.link.latency_ms ? format_duration(*observation.link.latency_ms)
+                                         : std::string("--"));
+    if (observation.link.latency_p50_ms) {
+        line << " p50=" << format_duration(*observation.link.latency_p50_ms);
+    }
+    line << " net=" << format_rate(observation.link.throughput_bytes_per_second);
+    line << " link_up=" << format_duration(observation.connection_uptime_ms);
+    line << " link_reconnects=" << observation.reconnects_observed;
+    return line.str();
+}
+
+std::string render_json_observation(const MonitorObservation& observation) {
+    const auto optional_number = [](const std::optional<std::int64_t>& value) {
+        return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+    };
+    nlohmann::json document;
+    document["agent"] = observation.agent;
+    document["observed_at_ms"] = wall_now_ms();
+    document["status"] = observation.status;
+    if (observation.health) {
+        document["health"] = *observation.health;
+    }
+    if (observation.status == "error") {
+        document["error"] = {{"code", observation.error_code},
+                             {"detail", observation.error_detail}};
+    }
+    document["console"] = {
+        {"latency_ms", optional_number(observation.link.latency_ms)},
+        {"latency_p50_ms", optional_number(observation.link.latency_p50_ms)},
+        {"latency_max_ms", optional_number(observation.link.latency_max_ms)},
+        {"throughput_bytes_per_second", observation.link.throughput_bytes_per_second},
+        {"bytes_read", observation.link.bytes_read},
+        {"bytes_written", observation.link.bytes_written},
+        {"connection_uptime_ms", observation.connection_uptime_ms},
+        {"reconnects_observed", observation.reconnects_observed}};
+    document["observations"] = observation.observations;
+    return document.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+}
+
+void emit_observation(std::ostream& out, const MonitorObservation& observation, bool json_mode) {
+    if (json_mode) {
+        out << render_json_observation(observation) << '\n';
+    } else {
+        out << render_human_observation(observation) << '\n';
+    }
+    out.flush();
 }
 
 // The four background-job lifecycle verbs (camera family + input family) map
@@ -183,7 +395,8 @@ struct ResultStreamer {
 
 void emit_unknown_verb(std::ostream& err, const std::string& verb) {
     err << "error: unknown verb '" << verb << "'\n";
-    err << "status: verbs: agents | exec <agent> <command> [args] | cancel <agent> <seq>\n";
+    err << "status: verbs: agents | exec <agent> <command> [args] | monitor <agent> [--json] | "
+           "cancel <agent> <seq>\n";
 }
 
 void emit_unknown_agent(std::ostream& err, const std::string& agent) {
@@ -416,6 +629,203 @@ int run_exec(const std::vector<std::string>& tail, CliStreams streams,
     return kExitFailure;
 }
 
+int run_monitor(const std::vector<std::string>& tail, CliStreams streams,
+                std::unique_ptr<IOperConsole>& console, const ConsoleFactory& make_console,
+                const std::string& config_path, const std::shared_ptr<AuditStore>& audit,
+                const MonitorOptions& options) {
+    std::string agent;
+    bool json_mode = false;
+    CLI::App app{"monitor <agent> [--json]"};
+    app.add_option("agent", agent, "target agent identity");
+    app.add_flag("--json", json_mode, "emit one JSON object per observation");
+    app.allow_extras();
+
+    std::vector<std::string> extras;
+    if (!parse_tail(app, tail, streams, "monitor <agent> [--json]", extras)) {
+        return kExitUsage;
+    }
+    if (agent.empty() || !extras.empty()) {
+        streams.err << "error: usage: monitor <agent> [--json]\n";
+        return kExitUsage;
+    }
+
+    // Monitor resets the cooperative flag so an earlier signal cannot leak
+    // into this invocation; the handler then only assigns it.
+    g_monitor_stop = 0;
+    install_monitor_signal_handlers();
+
+    const auto started = std::chrono::steady_clock::now();
+    const std::int64_t interval_ms = std::max<std::int64_t>(1, options.interval_ms);
+
+    std::uint64_t observations = 0;
+    std::uint64_t reconnects_observed = 0;
+    bool ever_live = false;
+    bool live_now = false;
+    bool down_announced = false;
+    std::optional<std::chrono::steady_clock::time_point> live_since;
+
+    const auto emit_status = [&](const std::string& text) {
+        streams.err << "status: " << text << "\n" << std::flush;
+    };
+    const auto record_end = [&](const std::string& outcome, const std::string& end_state,
+                                const std::string& note) {
+        const std::int64_t duration_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                  started)
+                .count();
+        record_monitor(audit, agent, duration_ms, outcome, end_state, observations,
+                       reconnects_observed, note);
+    };
+
+    try {
+        IOperConsole& console_ref = ensure_console(console, make_console, config_path);
+        emit_status("monitoring '" + agent + "' every " + std::to_string(interval_ms) +
+                    " ms (press Ctrl-C to stop)");
+
+        while (!monitor_stop_requested()) {
+            const auto cycle_start = std::chrono::steady_clock::now();
+
+            // One non-blocking transport step per cadence: this is the
+            // unbounded dial-in wait. If the target has no live session we
+            // still render an unavailable observation and keep looping; the
+            // observe loop itself is the deadline-free wait.
+            console_ref.pump();
+            const bool live = console_ref.is_live(agent);
+
+            MonitorObservation observation;
+            observation.agent = agent;
+            if (!live) {
+                live_now = false;
+                live_since.reset();
+                observation.status = "unavailable";
+                if (!down_announced) {
+                    emit_status("agent '" + agent +
+                                "' unavailable; waiting for re-registration");
+                    down_announced = true;
+                }
+            } else {
+                if (!live_now) {
+                    live_now = true;
+                    live_since = std::chrono::steady_clock::now();
+                    if (ever_live) {
+                        ++reconnects_observed;
+                        emit_status("agent '" + agent + "' is back; resuming observations");
+                    } else {
+                        ever_live = true;
+                        emit_status("agent '" + agent + "' is live; polling health");
+                    }
+                    down_announced = false;
+                }
+
+                std::string health_text;
+                std::string error_detail;
+                std::optional<protocol::CommandView> view;
+                std::string poll_failure;
+                try {
+                    view = console_ref.dispatch(
+                        agent, protocol::Cmd{kHealthCommand, {}},
+                        [&health_text, &error_detail](std::uint32_t, const protocol::Message& piece,
+                                                      bool) {
+                            if (const auto* text = std::get_if<protocol::ResultText>(&piece)) {
+                                health_text += text->text;
+                            } else if (const auto* err = std::get_if<protocol::Err>(&piece)) {
+                                error_detail = err->message;
+                            }
+                        });
+                } catch (const std::exception& error) {
+                    poll_failure = error.what();
+                }
+
+                if (!view.has_value()) {
+                    // The session vanished mid-poll (or the backend lost it):
+                    // report the failed observation, then let the next tick's
+                    // is_live() decide whether this is a down transition.
+                    observation.status = "error";
+                    observation.error_code = "poll_lost";
+                    observation.error_detail =
+                        poll_failure.empty() ? "agent session lost during the poll" : poll_failure;
+                } else if (view->status == protocol::CommandStatus::Failed &&
+                           view->error_code == "unknown_command") {
+                    // A pre-telemetry agent will never grow the verb during
+                    // this invocation: refuse immediately instead of emitting
+                    // an hour of identical errors (design D6).
+                    const std::string note =
+                        "unknown_command" +
+                        (error_detail.empty() ? std::string{} : ": " + error_detail);
+                    record_end("refused", "refused", note);
+                    streams.err << "error: refusal: '" << agent
+                                << "' cannot serve 'health' (unknown_command)";
+                    if (!error_detail.empty()) {
+                        streams.err << ": " << error_detail;
+                    }
+                    streams.err << "\n";
+                    return kExitRefused;
+                } else if (view->status == protocol::CommandStatus::Failed) {
+                    observation.status = "error";
+                    observation.error_code = view->error_code;
+                    observation.error_detail = error_detail;
+                } else if (view->status == protocol::CommandStatus::Completed) {
+                    const std::optional<nlohmann::json> snapshot =
+                        parse_health_snapshot(health_text);
+                    if (!snapshot) {
+                        observation.status = "error";
+                        observation.error_code = "invalid_snapshot";
+                        observation.error_detail = "agent returned a non-JSON health snapshot";
+                    } else {
+                        observation.status = "ok";
+                        observation.health = snapshot;
+                        down_announced = false;
+                    }
+                } else {
+                    observation.status = "error";
+                    observation.error_code = "incomplete_result";
+                    observation.error_detail = "health poll ended without a terminal result";
+                }
+            }
+
+            observation.link = console_ref.link_telemetry();
+            observation.connection_uptime_ms =
+                live_since ? std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - *live_since)
+                                 .count()
+                           : 0;
+            observation.reconnects_observed = reconnects_observed;
+            observation.observations = ++observations;
+            emit_observation(streams.out, observation, json_mode);
+
+            // Fixed cadence anchored at the cycle start; a poll that overruns
+            // the interval never bursts to catch up (the next observation
+            // still starts one interval after this one began).
+            const auto next = cycle_start + std::chrono::milliseconds(interval_ms);
+            for (;;) {
+                if (monitor_stop_requested()) {
+                    break;
+                }
+                const auto now = std::chrono::steady_clock::now();
+                if (now >= next) {
+                    break;
+                }
+                const auto remaining = next - now;
+                const auto slice =
+                    std::min(remaining,
+                             std::chrono::steady_clock::duration(std::chrono::milliseconds(10)));
+                std::this_thread::sleep_for(slice);
+            }
+        }
+    } catch (const CliSetupError& error) {
+        record_end("failed", "error", error.what());
+        throw;
+    } catch (const std::exception& error) {
+        record_end("failed", "error", error.what());
+        streams.err << "error: monitor failed: " << error.what() << "\n";
+        return kExitFailure;
+    }
+
+    emit_status("monitor interrupted after " + std::to_string(observations) + " observations");
+    record_end("executed", "interrupted", "");
+    return kExitOk;
+}
+
 int run_cancel(const std::vector<std::string>& tail, CliStreams streams,
                std::unique_ptr<IOperConsole>& console, const ConsoleFactory& make_console,
                const std::string& config_path) {
@@ -478,8 +888,13 @@ bool is_destructive_command(const std::string& command) {
                      command) != std::end(kDestructiveCommands);
 }
 
+void request_monitor_stop() noexcept {
+    g_monitor_stop = 1;
+}
+
 int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
-            const ConsoleFactory& make_console, const AuditStoreFactory& make_audit) {
+            const ConsoleFactory& make_console, const AuditStoreFactory& make_audit,
+            const MonitorOptions& monitor) {
     // Stage 1: global options (--config). Unknown tokens pass through so the
     // verb layer fully owns everything below argv[0]; an unknown verb therefore
     // fails before any console is constructed or configured.
@@ -506,7 +921,7 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
     }
     if (verb_tokens.empty()) {
         streams.err << "error: no verb given (verbs: agents | exec <agent> <command> [args] | "
-                       "cancel <agent> <seq>)\n";
+                       "monitor <agent> [--json] | cancel <agent> <seq>)\n";
         return kExitUsage;
     }
 
@@ -516,7 +931,7 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
     // Unknown verbs stay side-effect-free: nothing is constructed, audited,
     // or configured (the usage check guards the audit construction below).
     bool known_verb = false;
-    static const char* kKnownVerbs[] = {"agents", "exec", "cancel"};
+    static const char* kKnownVerbs[] = {"agents", "exec", "monitor", "cancel"};
     for (const char* known : kKnownVerbs) {
         if (verb == known) {
             known_verb = true;
@@ -561,6 +976,11 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
         return setup_guard(
             [&] { return run_exec(tail, streams, console, make_console, config_path, audit); });
     }
+    if (verb == "monitor") {
+        return setup_guard([&] {
+            return run_monitor(tail, streams, console, make_console, config_path, audit, monitor);
+        });
+    }
     if (verb == "cancel") {
         return setup_guard(
             [&] { return run_cancel(tail, streams, console, make_console, config_path); });
@@ -570,9 +990,10 @@ int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
 }
 
 int run_cli(int argc, const char* const argv[], CliStreams streams,
-            const ConsoleFactory& make_console, const AuditStoreFactory& make_audit) {
+            const ConsoleFactory& make_console, const AuditStoreFactory& make_audit,
+            const MonitorOptions& monitor) {
     return run_cli(std::vector<std::string>(argv, argv + argc), std::move(streams),
-                   make_console, make_audit);
+                   make_console, make_audit, monitor);
 }
 
 } // namespace tether::cli

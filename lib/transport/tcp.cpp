@@ -126,6 +126,7 @@ TcpConsoleTransport::TcpConsoleTransport(ConsoleTransportOptions options)
     if (!options_.resolve_token) {
         throw TransportError("a token resolver is required on the console transport");
     }
+    byte_totals_ = options_.byte_totals ? options_.byte_totals : std::make_shared<ByteTotals>();
 }
 
 TcpConsoleTransport::~TcpConsoleTransport() {
@@ -194,10 +195,16 @@ void TcpConsoleTransport::begin_accept() {
                 auto console_io = std::shared_ptr<asio::io_context>(&io_, [](asio::io_context*) {});
                 auto stream = std::make_unique<TcpByteStream>(std::move(console_io),
                                                               std::move(pending_socket_), "agent");
+                // Task 6.4: count both wire directions on the console side
+                // before the session consumes them.
+                auto counted_source =
+                    std::make_unique<ByteCountingSource>(*stream, *byte_totals_);
+                auto counted_sink = std::make_unique<ByteCountingSink>(*stream, *byte_totals_);
                 auto session = std::make_shared<protocol::ConsoleSession>(
-                    *stream, *stream, options_.session, options_.resolve_token);
-                connections_.push_back(Connection{std::move(stream), std::move(session), "",
-                                                 false, false, std::nullopt});
+                    *counted_source, *counted_sink, options_.session, options_.resolve_token);
+                connections_.push_back(Connection{std::move(stream), std::move(counted_source),
+                                                  std::move(counted_sink), std::move(session), "",
+                                                  false, false, std::nullopt});
                 Logger::instance().info("console accepted a connection",
                                         {{"sessions", std::to_string(connections_.size())}});
             }

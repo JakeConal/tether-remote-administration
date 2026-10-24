@@ -88,6 +88,12 @@ The agent's established-session loop tracks the next due tick (`interval_s`
 from config). On each 10 ms pump cycle, when a tick is due it samples and
 pushes into `HealthState`. There is **no thread and no queue**.
 
+The dial retry wait is sliced at the same 10 ms cadence (rather than one long
+`sleep`): each slice pumps the sampler through the `on_retry_wait` hook, so
+ticks continue to land while the agent is between sessions. The same
+`HealthState` outlives every link, so uptime and window history stay honest
+across console downtime.
+
 A command that occupies the main thread delays ticks; `HealthState` records
 the real wall time, so `sample_age_ms` grows truthfully and the window simply
 receives fewer ticks for that span. That honesty is a spec requirement
@@ -132,9 +138,11 @@ result payloads just as it does to control frames.
 
 ### D6: Monitor is a console invocation shape, not a protocol feature
 
-`cli.cpp` gains a `monitor` verb (target agent; `--json` flag). After the
-ordinary dial wait (unbounded for this verb by loop shape), `console/main.cpp`
-runs the observe loop at a fixed 1 s cadence:
+`cli.cpp` gains a `monitor` verb (target agent; `--json` flag). The observe
+loop lives in `console/cli.cpp` behind `run_cli()` (the thin `main.cpp` shell
+only wires streams/config), so it is drivable in-process by the test suites.
+After the ordinary dial wait (unbounded for this verb by loop shape), the loop
+runs at a fixed 1 s cadence:
 
 1. issue `health` through the existing command path (so confirmation gates,
    seq correlation, and registry behavior are untouched),

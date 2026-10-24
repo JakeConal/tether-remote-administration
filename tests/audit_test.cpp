@@ -43,6 +43,8 @@ struct FakeScript {
     std::vector<net::Message> pieces;
     std::optional<net::CommandView> view;
     std::vector<net::Cmd> dispatched;
+    int health_polls = 0;
+    int stop_after_health_polls = 0;
 
     void set_completed(std::uint32_t seq, std::vector<net::Message> fed_pieces) {
         pieces = std::move(fed_pieces);
@@ -81,10 +83,18 @@ public:
     }
 
     bool has_agent(const std::string&) override { return script_.has_agent; }
+    bool is_live(const std::string&) override { return script_.has_agent; }
 
     std::optional<net::CommandView> dispatch(const std::string&, const net::Cmd& command,
                                              const net::ResultHook& hook) override {
         script_.dispatched.push_back(command);
+        if (command.command == "health") {
+            ++script_.health_polls;
+            if (script_.stop_after_health_polls > 0 &&
+                script_.health_polls >= script_.stop_after_health_polls) {
+                tcli::request_monitor_stop();
+            }
+        }
         if (script_.dispatch_throws) {
             throw std::runtime_error(script_.dispatch_throw_text);
         }
@@ -694,4 +704,97 @@ TEST_CASE("config: audit_path is additive and optional") {
 
     std::error_code ec;
     fs::remove_all(dir, ec);
+}
+
+namespace {
+
+constexpr const char* kMonitorHealthSnapshot =
+    R"({"uptime_seconds":42,"reconnects":1,"latest":{"cpu_percent":12.5,)"
+    R"("memory_used":1073741824,"memory_total":8589934592,"processes":123,)"
+    R"("threads":456,"sampled_at_ms":1000},"window":{"span_seconds":60,"ticks":10,)"
+    R"("cpu_percent_avg":11.0,"cpu_percent_max":13.0,"memory_used_max":1073741824,)"
+    R"("window_coverage":0.5},"sample_age_ms":250,"interval_s":1})";
+
+int run_monitor_verb(FakeScript& script, std::ostringstream& out, std::ostringstream& err,
+                     const tcli::AuditStoreFactory& audit_factory) {
+    std::istringstream in;
+    return run_cli(std::vector<std::string>{"tether", "monitor", "a-1"},
+                   make_streams(out, err, in), factory_over(script), audit_factory,
+                   tcli::MonitorOptions{1});
+}
+
+} // namespace
+
+TEST_CASE("a monitor invocation lands exactly one record, never one per poll") {
+    FakeScript script;
+    script.set_completed(7, {net::ResultText{kMonitorHealthSnapshot}});
+    script.stop_after_health_polls = 3;
+    AuditRig rig;
+    std::ostringstream out;
+    std::ostringstream err;
+    const int status = run_monitor_verb(script, out, err, rig.factory);
+    CHECK(status == tcli::kExitOk);
+
+    // Three observations happened, but they are below the audit emit point.
+    CHECK(script.health_polls == 3);
+    REQUIRE(script.dispatched.size() == 3);
+    CHECK(script.dispatched.front().command == "health");
+    CHECK(out.str().find("cpu=12.5%") != std::string::npos);
+
+    const std::vector<tcli::AuditRecord> records = rig.store->query({});
+    REQUIRE(records.size() == 1);
+    const tcli::AuditRecord& record = records.front();
+    CHECK(record.agent == "a-1");
+    CHECK(record.command == "monitor");
+    CHECK(record.parameters == std::vector<std::string>{"a-1", "health"});
+    CHECK(record.seq == 0); // invocation-level: no single dispatch seq
+    CHECK(record.outcome == "executed");
+    CHECK(record.record_type == "command");
+    CHECK(record.detail.find("duration_ms=") != std::string::npos);
+    CHECK(record.detail.find("end_state=interrupted") != std::string::npos);
+    CHECK(record.detail.find("observations=3") != std::string::npos);
+
+    tcli::AuditQuery health_query;
+    health_query.command = std::string("health");
+    CHECK(rig.store->query(health_query).empty());
+}
+
+TEST_CASE("an operator-issued health command outside monitor mode is audited per issue") {
+    FakeScript script;
+    script.set_completed(7, {net::ResultText{kMonitorHealthSnapshot}});
+    AuditRig rig;
+    std::ostringstream out;
+    std::ostringstream err;
+    const int status = run_exec_verb(script, "health", {}, out, err, rig.factory);
+    CHECK(status == tcli::kExitOk);
+
+    const std::vector<tcli::AuditRecord> records = rig.store->query({});
+    REQUIRE(records.size() == 1);
+    CHECK(records.front().command == "health");
+    CHECK(records.front().seq == 7);
+    CHECK(records.front().outcome == "executed");
+    CHECK(out.str().find("\"latest\"") != std::string::npos);
+}
+
+TEST_CASE("a monitor against a pre-telemetry agent lands one refused record") {
+    FakeScript script;
+    script.set_failed(7, "unknown_command");
+    AuditRig rig;
+    std::ostringstream out;
+    std::ostringstream err;
+    const int status = run_monitor_verb(script, out, err, rig.factory);
+    CHECK(status == tcli::kExitRefused);
+    CHECK(script.health_polls == 1); // fast upgrade signal: no retry loop
+    CHECK(out.str().empty());        // the refusal is not an observation
+
+    const std::vector<tcli::AuditRecord> records = rig.store->query({});
+    REQUIRE(records.size() == 1);
+    const tcli::AuditRecord& record = records.front();
+    CHECK(record.command == "monitor");
+    CHECK(record.outcome == "refused");
+    CHECK(record.seq == 0);
+    CHECK(record.detail.find("end_state=refused") != std::string::npos);
+    CHECK(record.detail.find("unknown_command") != std::string::npos);
+    CHECK(err.str().find("error: refusal:") != std::string::npos);
+    CHECK(err.str().find("unknown_command") != std::string::npos);
 }

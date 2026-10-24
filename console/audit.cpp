@@ -130,6 +130,30 @@ std::string classify_command_outcome(const std::string& error_code) {
     return "failed";
 }
 
+AuditRecord make_monitor_record(const std::string& agent, std::int64_t end_epoch_ms,
+                                std::int64_t duration_ms, const std::string& outcome,
+                                const std::string& end_state, std::uint64_t observations,
+                                std::uint64_t reconnects_observed, const std::string& note) {
+    AuditRecord record;
+    record.time = format_audit_time_iso8601(end_epoch_ms);
+    record.time_epoch_ms = end_epoch_ms;
+    record.agent = agent;
+    record.command = "monitor";
+    // The invocation's parameters: the target identity and the verb it
+    // observes. Internal health polls are not separate command records.
+    record.parameters = {agent, "health"};
+    record.seq = 0;
+    record.outcome = outcome;
+    record.record_type = "command";
+    record.detail = "duration_ms=" + std::to_string(duration_ms) + " end_state=" + end_state +
+                    " observations=" + std::to_string(observations) +
+                    " reconnects_observed=" + std::to_string(reconnects_observed);
+    if (!note.empty()) {
+        record.detail += " detail=" + note;
+    }
+    return record;
+}
+
 std::optional<JobEventHint> parse_job_event_line(const std::string& line) {
     // Exactly one convention: the agent's result text carries the event as a
     // line whose JSON object has the "tether_job_event" root key; any other

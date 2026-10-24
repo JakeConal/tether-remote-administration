@@ -6,6 +6,7 @@
 #pragma once
 
 #include "cli.hpp"
+#include "link_stats.hpp"
 #include "tcp.hpp"
 
 #include <functional>
@@ -34,6 +35,14 @@ public:
                                                   const protocol::ResultHook& hook) override;
     CancelOutcome cancel(const std::string& agent, std::uint32_t seq) override;
 
+    // Monitor support (tasks 6.2/6.4): one non-blocking transport step plus
+    // the test side pump, liveness without the dial budget (the monitor's
+    // observe loop is itself the unbounded wait), and the console-local link
+    // measurements that ride each rendered observation.
+    void pump() override;
+    bool is_live(const std::string& identity) override;
+    LinkTelemetry link_telemetry() override;
+
     // Upper wall-clock bound for one dispatch wait; the session's own
     // per-command timeout normally fires first.
     void set_dispatch_budget_ms(std::int64_t budget) { dispatch_budget_ms_ = budget; }
@@ -57,6 +66,8 @@ private:
     std::function<void()> side_pump_;
     std::int64_t dispatch_budget_ms_ = 65'000;
     std::int64_t agent_dial_budget_ms_ = 0;
+    LatencySampler latency_;
+    ByteRateMeter byte_rate_;
 
     // Pumps the transport (accept + session handshakes + registry
     // registration) until `ready` turns true or the dial budget expires.

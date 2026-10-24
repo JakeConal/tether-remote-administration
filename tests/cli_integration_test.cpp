@@ -103,6 +103,9 @@ struct BorrowedConsole final : tc::IOperConsole {
 
     std::vector<tp::RegistryEntry> list_agents() override { return target->list_agents(); }
     bool has_agent(const std::string& identity) override { return target->has_agent(identity); }
+    void pump() override { target->pump(); }
+    bool is_live(const std::string& identity) override { return target->is_live(identity); }
+    tc::LinkTelemetry link_telemetry() override { return target->link_telemetry(); }
     std::optional<tp::CommandView> dispatch(const std::string& agent, const tp::Cmd& command,
                                             const tp::ResultHook& hook) override {
         return target->dispatch(agent, command, hook);
@@ -301,4 +304,201 @@ TEST_CASE("an expired dial budget expires into the unknown-agent refusal") {
     CHECK(listing.exit_code == tc::kExitOk);
     CHECK(listing.out.empty());
     CHECK(listing.err.empty());
+}
+
+namespace {
+
+constexpr const char* kMonitorHealthSnapshot =
+    R"({"uptime_seconds":42,"reconnects":1,"latest":{"cpu_percent":12.5,)"
+    R"("memory_used":1073741824,"memory_total":8589934592,"processes":123,)"
+    R"("threads":456,"sampled_at_ms":1000},"window":{"span_seconds":60,"ticks":10,)"
+    R"("cpu_percent_avg":11.0,"cpu_percent_max":13.0,"memory_used_max":1073741824,)"
+    R"("window_coverage":0.5},"sample_age_ms":250,"interval_s":1})";
+
+RunResult run_monitor(tc::TcpOperConsole& console, const std::vector<std::string>& args,
+                      const std::shared_ptr<tc::AuditStore>& audit) {
+    std::ostringstream out;
+    std::ostringstream err;
+    std::istringstream in;
+    RunResult result;
+    result.exit_code = tc::run_cli(
+        args, tc::CliStreams{out, err, in, false, false},
+        [&console](const std::string&) {
+            return std::unique_ptr<tc::IOperConsole>(new BorrowedConsole(console));
+        },
+        [audit](const std::string&) { return audit; }, tc::MonitorOptions{10});
+    result.out = out.str();
+    result.err = err.str();
+    return result;
+}
+
+} // namespace
+
+TEST_CASE("monitor bridges an agent restart and resumes observations") {
+    tether::common::Logger::instance().set_sink(std::make_unique<NullLogSink>());
+    tether::common::Logger::instance().set_min_level(tether::common::LogLevel::Error);
+
+    tt::ConsoleTransportOptions options;
+    options.listen_address = "127.0.0.1";
+    options.port = 0;
+    options.session = loopback_config();
+    options.resolve_token = [](const std::string& identity) {
+        return identity == "agent-1" ? std::string{"tok-1"} : std::string{};
+    };
+    tt::TcpConsoleTransport console{options};
+    console.start();
+    REQUIRE(console.listening_port() != 0);
+
+    // Scripted agent lifecycle: wait (monitor must render unavailable), dial
+    // and authenticate, answer three health polls, drop the wire abruptly,
+    // then re-dial and re-register during the same monitor invocation.
+    enum Phase { Waiting = 0, InitialHandshake, Live, Dropped, Reconnecting, LiveAgain };
+    int phase = Waiting;
+    int health_seen = 0;
+    int wait_ticks = 0;
+    int total_pumps = 0;
+    std::unique_ptr<tt::TcpAgentLink> agent;
+
+    const auto install_handler = [&] {
+        agent->set_command_handler(
+            [&](std::uint32_t seq, const tp::Cmd& command, const std::function<bool()>&) {
+                if (command.command != "health" || !command.args.empty()) {
+                    agent->send_result(seq, tp::Err{"unknown_command", "not a health request"});
+                    return;
+                }
+                const int seen = ++health_seen;
+                agent->send_result(seq,
+                                   tp::ResultText{std::string{kMonitorHealthSnapshot} + "\n"});
+                // Stop only after the post-reconnect observations have landed.
+                if (phase == LiveAgain && seen >= 6) {
+                    tc::request_monitor_stop();
+                }
+            });
+    };
+
+    const auto connect_agent = [&] {
+        agent = tt::TcpAgentLink::connect({"127.0.0.1", console.listening_port()},
+                                          {"agent-1", "host-1"}, "tok-1", loopback_config());
+        install_handler();
+    };
+
+    const auto side_pump = [&] {
+        if (++total_pumps > 1500) {
+            // Keep a regression from hanging the suite forever: the checks
+            // below then fail with the state that was actually reached.
+            tc::request_monitor_stop();
+            return;
+        }
+        const tt::TransportMillis now = tt::monotonic_now_ms();
+        switch (phase) {
+            case Waiting:
+                if (++wait_ticks >= 3) {
+                    connect_agent();
+                    agent->begin_handshake(now);
+                    phase = InitialHandshake;
+                }
+                break;
+            case InitialHandshake:
+                agent->pump(now);
+                if (agent->established() && console_established(console, "agent-1")) {
+                    phase = Live;
+                }
+                break;
+            case Live:
+                agent->pump(now);
+                if (health_seen >= 3) {
+                    agent->shutdown_stream();
+                    phase = Dropped;
+                }
+                break;
+            case Dropped:
+                // No agent pump after an abrupt close: the console's next
+                // pump observes EOF and moves the registry entry Down.
+                if (!console_established(console, "agent-1")) {
+                    agent.reset();
+                    phase = Reconnecting;
+                }
+                break;
+            case Reconnecting:
+                connect_agent();
+                agent->begin_handshake(now);
+                phase = LiveAgain;
+                break;
+            case LiveAgain:
+                agent->pump(now);
+                break;
+        }
+    };
+
+    tc::TcpOperConsole cli_console{console, tt::monotonic_now_ms, side_pump};
+    const auto audit = std::make_shared<tc::AuditStore>(std::string{});
+    const RunResult result =
+        run_monitor(cli_console, {"tether-console", "monitor", "agent-1"}, audit);
+
+    CHECK(result.exit_code == tc::kExitOk);
+    CHECK(health_seen >= 6);
+    // The initial unavailable phase, the live observations before the drop,
+    // and the resumed observations after re-registration.
+    CHECK(result.out.find("agent-1 unavailable") != std::string::npos);
+    CHECK(result.out.find("cpu=12.5%") != std::string::npos);
+    CHECK(result.out.find("link_reconnects=1") != std::string::npos);
+    CHECK(result.err.find("status: agent 'agent-1' unavailable") != std::string::npos);
+    CHECK(result.err.find("status: agent 'agent-1' is live") != std::string::npos);
+    CHECK(result.err.find("status: agent 'agent-1' is back") != std::string::npos);
+    CHECK(result.err.find("status: monitor interrupted") != std::string::npos);
+
+    // Exactly one invocation-level audit record, with console-observed
+    // reconnect count and duration; the internal polls left no trace.
+    const std::vector<tc::AuditRecord> records = audit->query({});
+    REQUIRE(records.size() == 1);
+    CHECK(records.front().agent == "agent-1");
+    CHECK(records.front().command == "monitor");
+    CHECK(records.front().parameters == std::vector<std::string>{"agent-1", "health"});
+    CHECK(records.front().outcome == "executed");
+    CHECK(records.front().detail.find("end_state=interrupted") != std::string::npos);
+    CHECK(records.front().detail.find("duration_ms=") != std::string::npos);
+    CHECK(records.front().detail.find("reconnects_observed=1") != std::string::npos);
+}
+
+TEST_CASE("monitor refuses a pre-telemetry agent on the first poll") {
+    tether::common::Logger::instance().set_sink(std::make_unique<NullLogSink>());
+    tether::common::Logger::instance().set_min_level(tether::common::LogLevel::Error);
+
+    tt::ConsoleTransportOptions options;
+    options.listen_address = "127.0.0.1";
+    options.port = 0;
+    options.session = loopback_config();
+    options.resolve_token = [](const std::string& identity) {
+        return identity == "agent-1" ? std::string{"tok-1"} : std::string{};
+    };
+    tt::TcpConsoleTransport console{options};
+    console.start();
+    REQUIRE(console.listening_port() != 0);
+
+    std::unique_ptr<tt::TcpAgentLink> agent = tt::TcpAgentLink::connect(
+        {"127.0.0.1", console.listening_port()}, {"agent-1", "host-1"}, "tok-1",
+        loopback_config());
+    agent->set_command_handler(
+        [&](std::uint32_t seq, const tp::Cmd&, const std::function<bool()>&) {
+            agent->send_result(seq, tp::Err{"unknown_command", "health is not a v2 command"});
+        });
+    REQUIRE(handshake_until_established(console, agent, "agent-1"));
+
+    tc::TcpOperConsole cli_console{
+        console, tt::monotonic_now_ms,
+        [&agent] { agent->pump(tt::monotonic_now_ms()); }};
+    const auto audit = std::make_shared<tc::AuditStore>(std::string{});
+    const RunResult result =
+        run_monitor(cli_console, {"tether-console", "monitor", "agent-1"}, audit);
+
+    CHECK(result.exit_code == tc::kExitRefused);
+    CHECK(result.out.empty()); // refusal is not an observation
+    CHECK(result.err.find("error: refusal:") != std::string::npos);
+    CHECK(result.err.find("unknown_command") != std::string::npos);
+
+    const std::vector<tc::AuditRecord> records = audit->query({});
+    REQUIRE(records.size() == 1);
+    CHECK(records.front().command == "monitor");
+    CHECK(records.front().outcome == "refused");
+    CHECK(records.front().detail.find("end_state=refused") != std::string::npos);
 }

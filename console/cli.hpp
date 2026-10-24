@@ -19,17 +19,20 @@
 // Exit codes (operator-console delta requires distinguishable non-success
 // codes but fixes no numerics; this documented choice keeps every failure
 // class scriptable):
-//   0 success
+//   0 success (including a monitor the operator interrupted)
 //   1 runtime/command/transport failure (agent ERR, timeout, dispatch or
 //     console setup failure)
 //   2 usage failure: unknown verb, malformed args (nothing gets dispatched)
 //   3 unknown agent, detected against the registry before any dispatch
-//   4 unconfirmed destructive command refused before dispatch
+//   4 unconfirmed destructive command refused before dispatch; a monitor
+//     whose first health poll is refused with unknown_command (target
+//     predates the telemetry verb)
 #pragma once
 
 #include "audit.hpp"
 #include "session.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <istream>
 #include <memory>
@@ -64,6 +67,34 @@ struct CliStreams {
 // leaves this interface as an option).
 enum class CancelOutcome { Sent, NotPending, NotEligible };
 
+// Console-side link health rendered alongside an agent snapshot (design D7,
+// tasks 6.2/6.4). Latency is the issue->terminal time of the console's own
+// commands; throughput is the byte delta over the recent monitor interval.
+// Optionals stay empty until the console has observed a sample, and fake
+// consoles keep the defaults (the renderer prints "--").
+struct LinkTelemetry {
+    std::optional<std::int64_t> latency_ms;
+    std::optional<std::int64_t> latency_p50_ms;
+    std::optional<std::int64_t> latency_max_ms;
+    double throughput_bytes_per_second = 0.0;
+    std::uint64_t bytes_read = 0;
+    std::uint64_t bytes_written = 0;
+};
+
+// Test seam for the monitor cadence. Production leaves the default: the
+// operator-console spec fixes one observation per second. Short-lived test
+// invocations pass a smaller interval so the state transitions can be pinned
+// without multi-second sleeps.
+struct MonitorOptions {
+    std::int64_t interval_ms = 1000;
+};
+
+// Cooperative interrupt flag. The SIGINT/SIGBREAK handler installed by the
+// monitor verb only calls this (a flag assignment, no I/O); the observe loop
+// exits at its next check with kExitOk. Tests call it directly to pin the
+// interrupted path without raising a real signal.
+void request_monitor_stop() noexcept;
+
 // The operator-side command surface. Production backs this with the TCP
 // console transport (tcp_console.hpp); tests inject fakes. `dispatch` issues
 // the command to the named agent and drives the session stack until the
@@ -81,6 +112,14 @@ public:
         const std::string& agent, const protocol::Cmd& command,
         const protocol::ResultHook& hook) = 0;
     virtual CancelOutcome cancel(const std::string& agent, std::uint32_t seq) = 0;
+
+    // Monitor support. The defaults keep every existing fake/source compiling
+    // unchanged: the monitor still observes through has_agent/dispatch. The
+    // real backend advances its transport (accepting a dial-in while the
+    // target is down) and exposes its locally measured link stats.
+    virtual void pump() {}
+    virtual bool is_live(const std::string& identity) { return has_agent(identity); }
+    virtual LinkTelemetry link_telemetry() { return {}; }
 };
 
 // Console construction failure: the verb surface reports it on stderr with
@@ -115,14 +154,17 @@ using AuditStoreFactory =
 // INCLUDING the program name (arguments[0] is skipped); the verb surface is:
 //   agents
 //   exec <agent> <command> [args...] [--yes]
+//   monitor <agent> [--json]
 //   cancel <agent> <seq>
 int run_cli(const std::vector<std::string>& arguments, CliStreams streams,
             const ConsoleFactory& make_console,
-            const AuditStoreFactory& make_audit = nullptr);
+            const AuditStoreFactory& make_audit = nullptr,
+            const MonitorOptions& monitor = {});
 
 // argc/argv convenience wrapper.
 int run_cli(int argc, const char* const argv[], CliStreams streams,
             const ConsoleFactory& make_console,
-            const AuditStoreFactory& make_audit = nullptr);
+            const AuditStoreFactory& make_audit = nullptr,
+            const MonitorOptions& monitor = {});
 
 } // namespace tether::cli

@@ -67,7 +67,21 @@ std::optional<protocol::CommandView> TcpOperConsole::dispatch(
     const std::string& agent, const protocol::Cmd& command, const protocol::ResultHook& hook) {
     // Unknown/non-eligible agents stay a verb-layer concern (exit 3); this
     // speaks TransportError when eligibility races away from the check.
-    const std::uint32_t seq = transport_->issue(agent, command, hook, clock_());
+    const transport::TransportMillis issued_at = clock_();
+    // Task 6.4: stamp the per-issued-seq latency at the first terminal piece
+    // (the hook is the completion point the monitor's polls ride), keeping the
+    // caller's hook behavior byte-identical.
+    const protocol::ResultHook stamped =
+        [this, &hook](std::uint32_t seq, const protocol::Message& piece, bool terminal) {
+            if (terminal) {
+                latency_.completed(seq, clock_());
+            }
+            if (hook) {
+                hook(seq, piece, terminal);
+            }
+        };
+    const std::uint32_t seq = transport_->issue(agent, command, stamped, clock_());
+    latency_.issued(seq, issued_at);
 
     const transport::TransportMillis deadline = clock_() + dispatch_budget_ms_;
     for (;;) {
@@ -84,6 +98,7 @@ std::optional<protocol::CommandView> TcpOperConsole::dispatch(
         }
         const std::optional<protocol::CommandView> view = session->command(seq);
         if (view && view->status != protocol::CommandStatus::Pending) {
+            latency_.completed(seq, clock_());
             return view;
         }
         if (session->state() == protocol::SessionState::Down) {
@@ -98,6 +113,32 @@ std::optional<protocol::CommandView> TcpOperConsole::dispatch(
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
+}
+
+void TcpOperConsole::pump() {
+    transport_->pump(clock_());
+    if (side_pump_) {
+        side_pump_();
+    }
+}
+
+bool TcpOperConsole::is_live(const std::string& identity) {
+    const auto session = transport_->session_for(identity);
+    return session && session->state() == protocol::SessionState::Established;
+}
+
+LinkTelemetry TcpOperConsole::link_telemetry() {
+    LinkTelemetry stats;
+    stats.latency_ms = latency_.latest_ms();
+    stats.latency_p50_ms = latency_.p50_ms();
+    stats.latency_max_ms = latency_.max_ms();
+    const auto totals = transport_->byte_totals();
+    if (totals) {
+        stats.bytes_read = totals->read_bytes;
+        stats.bytes_written = totals->written_bytes;
+        stats.throughput_bytes_per_second = byte_rate_.observe(totals->total_bytes(), clock_());
+    }
+    return stats;
 }
 
 CancelOutcome TcpOperConsole::cancel(const std::string& agent, std::uint32_t seq) {

@@ -18,6 +18,7 @@
 
 #include "transport.hpp"
 
+#include "byte_counters.hpp"
 #include "session.hpp"
 
 #include <asio.hpp>
@@ -72,6 +73,13 @@ struct ConsoleTransportOptions {
     std::uint16_t port = 0;              // 0 -> ephemeral (tests report actual)
     protocol::SessionConfig session;     // handshake/keepalive/timeout knobs
     protocol::TokenResolver resolve_token; // HELLO identity -> provisioned token
+
+    // Console-local byte counters (add-health-telemetry task 6.4). Optional:
+    // when empty the transport creates its own, so every console link is
+    // countable and the agent path stays untouched. Callers that want to
+    // sample the counters (the monitor's throughput meter) inject the shared
+    // object and read it through byte_totals().
+    std::shared_ptr<ByteTotals> byte_totals;
 };
 
 // Accepts multiple agents concurrently; each HELLO-superseding session
@@ -103,9 +111,18 @@ public:
     // (identities sorted; superseded-but-connected sessions as stale rows).
     std::vector<protocol::RegistryEntry> registry_entries();
 
+    // Console-side link counters accumulated across every accepted session
+    // (empty is impossible after construction; the transport owns a default).
+    std::shared_ptr<const ByteTotals> byte_totals() const { return byte_totals_; }
+
 private:
     struct Connection {
         std::unique_ptr<TcpByteStream> stream;
+        // Counting decorators around `stream` for the console-side throughput
+        // reading; the session speaks through these (declaration order keeps
+        // the decorators alive for the session's whole lifetime).
+        std::unique_ptr<ByteCountingSource> counted_source;
+        std::unique_ptr<ByteCountingSink> counted_sink;
         std::shared_ptr<protocol::ConsoleSession> session;
         std::string identity;
         bool registered = false;
@@ -126,6 +143,7 @@ private:
     protocol::AgentRegistry registry_;
     std::uint16_t listening_port_ = 0;
     bool started_ = false;
+    std::shared_ptr<ByteTotals> byte_totals_;
 };
 
 // ---- agent side: dial out with bounded retry/backoff -------------------------

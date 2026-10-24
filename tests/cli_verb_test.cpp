@@ -31,6 +31,10 @@ struct FakeConsole final : tc::IOperConsole {
     std::vector<tp::RegistryEntry> rows;
     int dispatch_calls = 0;
     int cancel_calls = 0;
+    int pump_calls = 0;
+    int health_polls = 0;
+    int stop_after_health_polls = 0;
+    int stop_after_pumps = 0;
     std::vector<std::pair<std::string, tp::Cmd>> dispatch_log;
 
     // Canned exec outcome: pieces stream through the hook first, then the
@@ -48,10 +52,23 @@ struct FakeConsole final : tc::IOperConsole {
         }
         return false;
     }
+    void pump() override {
+        ++pump_calls;
+        if (stop_after_pumps > 0 && pump_calls >= stop_after_pumps) {
+            tc::request_monitor_stop();
+        }
+    }
+    bool is_live(const std::string& identity) override { return has_agent(identity); }
     std::optional<tp::CommandView> dispatch(const std::string& agent, const tp::Cmd& command,
                                             const tp::ResultHook& hook) override {
         ++dispatch_calls;
         dispatch_log.emplace_back(agent, command);
+        if (command.command == "health") {
+            ++health_polls;
+            if (stop_after_health_polls > 0 && health_polls >= stop_after_health_polls) {
+                tc::request_monitor_stop();
+            }
+        }
         for (const tp::Message& piece : canned_pieces) {
             hook(7, piece, false);
         }
@@ -80,6 +97,9 @@ struct RecordingRef final : tc::IOperConsole {
 
     std::vector<tp::RegistryEntry> list_agents() override { return target->list_agents(); }
     bool has_agent(const std::string& identity) override { return target->has_agent(identity); }
+    void pump() override { target->pump(); }
+    bool is_live(const std::string& identity) override { return target->is_live(identity); }
+    tc::LinkTelemetry link_telemetry() override { return target->link_telemetry(); }
     std::optional<tp::CommandView> dispatch(const std::string& agent, const tp::Cmd& command,
                                             const tp::ResultHook& hook) override {
         return target->dispatch(agent, command, hook);
@@ -95,7 +115,8 @@ struct RunResult {
     std::string err;
 };
 
-RunResult drive(FakeConsole& console, const std::vector<std::string>& args) {
+RunResult drive(FakeConsole& console, const std::vector<std::string>& args,
+                const tc::MonitorOptions& monitor = {}) {
     std::ostringstream out;
     std::ostringstream err;
     std::istringstream in;
@@ -104,7 +125,8 @@ RunResult drive(FakeConsole& console, const std::vector<std::string>& args) {
                                    [&console](const std::string&) {
                                        return std::unique_ptr<tc::IOperConsole>(
                                            new RecordingRef(console));
-                                   });
+                                   },
+                                   nullptr, monitor);
     result.out = out.str();
     result.err = err.str();
     return result;
@@ -247,4 +269,85 @@ TEST_CASE("scripts distinguish the outcome classes purely by exit code") {
     CHECK(usage != failure);
     CHECK(unknown_agent != failure);
     CHECK(console.dispatch_calls == 0);
+}
+
+namespace {
+
+constexpr const char* kHealthSnapshot =
+    R"({"uptime_seconds":42,"reconnects":1,"latest":{"cpu_percent":12.5,)"
+    R"("memory_used":1073741824,"memory_total":8589934592,"processes":123,)"
+    R"("threads":456,"sampled_at_ms":1000},"window":{"span_seconds":60,"ticks":10,)"
+    R"("cpu_percent_avg":11.0,"cpu_percent_max":13.0,"memory_used_max":1073741824,)"
+    R"("window_coverage":0.5},"sample_age_ms":250,"interval_s":1})";
+
+tp::CommandView completed_health_view() {
+    tp::CommandView view;
+    view.seq = 7;
+    view.status = tp::CommandStatus::Completed;
+    view.command = "health";
+    return view;
+}
+
+} // namespace
+
+TEST_CASE("monitor targets an agent, emits JSON observations, and rejects malformed tails") {
+    FakeConsole console;
+    console.rows = {{"agent-1", tp::RegistryState::Live}};
+    console.canned_pieces = {tp::ResultText{kHealthSnapshot}};
+    console.canned_view = completed_health_view();
+    console.stop_after_health_polls = 2;
+
+    const RunResult result = drive(console,
+                                   {"tether-console", "monitor", "agent-1", "--json"},
+                                   tc::MonitorOptions{1});
+    CHECK(result.exit_code == tc::kExitOk);
+    CHECK(console.health_polls == 2);
+    REQUIRE(console.dispatch_log.size() == 2);
+    CHECK(console.dispatch_log[0].first == "agent-1");
+    CHECK(console.dispatch_log[0].second.command == "health");
+    CHECK(console.dispatch_log[0].second.args.empty());
+
+    // Exactly two self-contained JSON object lines on stdout; status stays on
+    // stderr and never leaks into the observation stream.
+    std::istringstream lines(result.out);
+    std::string line;
+    int count = 0;
+    while (std::getline(lines, line)) {
+        REQUIRE_FALSE(line.empty());
+        CHECK(line.front() == '{');
+        CHECK(line.back() == '}');
+        CHECK(line.find("\"agent\":\"agent-1\"") != std::string::npos);
+        CHECK(line.find("\"status\":\"ok\"") != std::string::npos);
+        CHECK(line.find("\"health\"") != std::string::npos);
+        CHECK(line.find("\"console\"") != std::string::npos);
+        ++count;
+    }
+    CHECK(count == 2);
+    CHECK(result.err.find("status: monitoring 'agent-1' every 1 ms") != std::string::npos);
+    CHECK(result.out.find("status:") == std::string::npos);
+
+    // Malformed tails are usage failures and never dispatch.
+    const int before = console.dispatch_calls;
+    CHECK(drive(console, {"tether-console", "monitor"}).exit_code == tc::kExitUsage);
+    CHECK(drive(console, {"tether-console", "monitor", "agent-1", "extra"}).exit_code ==
+          tc::kExitUsage);
+    CHECK(drive(console, {"tether-console", "monitor", "agent-1", "--bogus"}).exit_code ==
+          tc::kExitUsage);
+    CHECK(console.dispatch_calls == before);
+}
+
+TEST_CASE("monitor presents a missing target as unavailable without refusing it") {
+    // Unlike exec/cancel, monitor must not pre-check the registry: the named
+    // agent may simply not have dialed yet, and the observe loop is the
+    // deadline-free wait.
+    FakeConsole console;
+    console.stop_after_pumps = 3;
+    const RunResult result = drive(console, {"tether-console", "monitor", "ghost"},
+                                   tc::MonitorOptions{1});
+    CHECK(result.exit_code == tc::kExitOk);
+    CHECK(console.dispatch_calls == 0);
+    CHECK(result.out.find("ghost unavailable") != std::string::npos);
+    CHECK(result.err.find("error:") == std::string::npos);
+    CHECK(result.err.find("waiting for re-registration") != std::string::npos);
+    CHECK(result.err.find("monitor interrupted after 3 observations") != std::string::npos);
 }

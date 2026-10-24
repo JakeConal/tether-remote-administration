@@ -28,11 +28,11 @@
 
 ## 6. Console monitor
 
-- [ ] 6.1 Add the `monitor` verb to `console/cli.cpp` (target agent; `--json` flag; unknown agent and unknown verb stay structured refusals); extend `tests/cli_verb_test.cpp` accordingly
-- [ ] 6.2 Implement the observe loop in `console/main.cpp`: unbounded dial wait for this verb, fixed 1 s cadence, one human line per interval, unavailable rendering while the target is down, resume after re-registration, first-poll `unknown_command` refusal exits with the refusal outcome, cooperative SIGINT flag exits 0; pin the state transitions in `tests/cli_integration_test.cpp`
-- [ ] 6.3 Pin the stream contract in `tests/cli_stream_test.cpp`: observations to stdout, status to stderr, and `--json` emits one parseable JSON object per line even when piped
-- [ ] 6.4 Add console-side instrumentation: per-issued-seq latency sampling and counting `IByteSource`/`IByteSink` wrappers for throughput; verify counters and interval math in a small unit test feeding canned bytes/timestamps
-- [ ] 6.5 Amend `console/audit.cpp` so a monitor invocation ends with exactly one audit record (command `monitor`, target parameter, duration, end state) and its internal polls emit nothing, while `exec <agent> health` still audits per issue; extend `tests/audit_test.cpp` and keep the existing job lifecycle scenarios green
+- [x] 6.1 Add the `monitor` verb to `console/cli.cpp` (target agent; `--json` flag; unknown agent and unknown verb stay structured refusals); extend `tests/cli_verb_test.cpp` accordingly
+- [x] 6.2 Implement the observe loop in `console/cli.cpp` (the thin `console/main.cpp` shell invokes it through `run_cli`, so the loop is testable in-process): unbounded dial wait for this verb, fixed 1 s cadence, one human line per interval, unavailable rendering while the target is down, resume after re-registration, first-poll `unknown_command` refusal exits with the refusal outcome, cooperative SIGINT flag exits 0; pin the state transitions in `tests/cli_integration_test.cpp`
+- [x] 6.3 Pin the stream contract in `tests/cli_stream_test.cpp`: observations to stdout, status to stderr, and `--json` emits one parseable JSON object per line even when piped
+- [x] 6.4 Add console-side instrumentation: per-issued-seq latency sampling and counting `IByteSource`/`IByteSink` wrappers for throughput; verify counters and interval math in a small unit test feeding canned bytes/timestamps
+- [x] 6.5 Amend `console/audit.cpp` so a monitor invocation ends with exactly one audit record (command `monitor`, target parameter, duration, end state) and its internal polls emit nothing, while `exec <agent> health` still audits per issue; extend `tests/audit_test.cpp` and keep the existing job lifecycle scenarios green
 
 ## 7. End-to-end and docs
 

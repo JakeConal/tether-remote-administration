@@ -65,8 +65,10 @@ target_link_libraries(tether-cli-verb-tests PRIVATE doctest::doctest tether-cli 
 add_test(NAME cli-verb-test COMMAND tether-cli-verb-tests)
 
 # Task 5.3: stdout/stderr streaming and byte-exact files (fake console).
+# nlohmann is test-side only: the monitor JSONL contract parses every line.
 add_executable(tether-cli-stream-tests cli_stream_test.cpp)
-target_link_libraries(tether-cli-stream-tests PRIVATE doctest::doctest tether-cli tether-protocol)
+target_link_libraries(tether-cli-stream-tests
+    PRIVATE doctest::doctest tether-cli tether-protocol nlohmann_json::nlohmann_json)
 add_test(NAME cli-stream-test COMMAND tether-cli-stream-tests)
 
 # Task 5.4: destructive-command confirmation gate (fake console).
@@ -78,6 +80,12 @@ add_test(NAME cli-confirm-test COMMAND tether-cli-confirm-tests)
 add_executable(tether-cli-integration-tests cli_integration_test.cpp)
 target_link_libraries(tether-cli-integration-tests PRIVATE doctest::doctest tether-cli tether-protocol tether-transport tether-common)
 add_test(NAME cli-integration-test COMMAND tether-cli-integration-tests)
+
+# Task 6.4: console-local link instrumentation (latency sampler + counting
+# byte decorators + interval throughput math) with canned bytes/timestamps.
+add_executable(tether-cli-stats-tests cli_stats_test.cpp)
+target_link_libraries(tether-cli-stats-tests PRIVATE doctest::doctest tether-cli)
+add_test(NAME cli-stats-test COMMAND tether-cli-stats-tests)
 
 # Phase 6: commands and capability matrix (appended per task 6.1-6.4; one TU
 # per suite). tether-argv-probe is not a test: it is the tiny child the
@@ -220,7 +228,7 @@ set_tests_properties(
     smoke config-test health-test logging-test envelope-test payloads-test
     handshake-test session-test base64-test tcp-loopback-test gmail-test
     transport-equiv-test registry-test cli-verb-test cli-stream-test
-    cli-confirm-test cli-integration-test matrix-test process-family-test
+    cli-confirm-test cli-integration-test cli-stats-test matrix-test process-family-test
     file-family-test power-family-test capture-family-test camera-family-test
     command-session-test input-family-test app-family-test audit-test
     PROPERTIES TIMEOUT 600)

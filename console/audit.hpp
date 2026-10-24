@@ -83,6 +83,22 @@ std::string classify_command_outcome(const std::string& error_code);
 // millisecond precision the record keeps numerically).
 std::string format_audit_time_iso8601(std::int64_t epoch_ms);
 
+// The monitor invocation's single record (design D8, task 6.5): command
+// "monitor", parameters {target agent, monitored verb}, seq 0 (the internal
+// polls are deliberately below the audit emit point), and the invocation's
+// duration and end state encoded in `detail` so the persisted record shape
+// stays backward compatible:
+//   duration_ms=<n> end_state=<interrupted|refused|error> observations=<n>
+//   reconnects_observed=<n> [detail=<note>]
+// `outcome` is the existing command classification: "executed" for an
+// operator-interrupted run, "refused" for a target refusal, "failed" for an
+// error ending.
+AuditRecord make_monitor_record(const std::string& agent, std::int64_t end_epoch_ms,
+                                std::int64_t duration_ms, const std::string& outcome,
+                                const std::string& end_state, std::uint64_t observations,
+                                std::uint64_t reconnects_observed,
+                                const std::string& note = {});
+
 // The machine-readable job event line the input family embeds in a start
 // result's text payload (the frozen RESULT-JSON convention: job events ride
 // JSON inside RESULT_TEXT; the wire's message-type set stays untouched).
