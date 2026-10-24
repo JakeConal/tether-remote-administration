@@ -24,6 +24,7 @@
 #include "session.hpp"
 #include "tcp.hpp"
 
+#include <memory>
 #include <vector>
 
 namespace tether::agent {
@@ -44,5 +45,17 @@ void install_commands(syscalls::CommandDispatcher& dispatcher, protocol::AgentSe
 
 // Same, for the TCP agent link (forwards to the link's owned AgentSession).
 void install_commands(syscalls::CommandDispatcher& dispatcher, tether::transport::TcpAgentLink& link);
+
+// The agent install path for the telemetry family (add-health-telemetry task
+// 4.3): binds the process-wide sampler control to the dispatcher, then
+// installs the handler as above. `telemetry` must wrap the dial-loop-owned
+// HealthState (its started_at/reconnect counters and rolling window outlive
+// every link), so a re-established session serves the same history. The
+// caller keeps that same control to drive pump-loop sampling (task 5.2).
+void install_commands(syscalls::CommandDispatcher& dispatcher, protocol::AgentSession& session,
+                      std::shared_ptr<syscalls::ITelemetryControl> telemetry);
+
+void install_commands(syscalls::CommandDispatcher& dispatcher, tether::transport::TcpAgentLink& link,
+                      std::shared_ptr<syscalls::ITelemetryControl> telemetry);
 
 } // namespace tether::agent

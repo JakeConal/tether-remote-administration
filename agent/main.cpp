@@ -13,6 +13,7 @@
 #include "capture.hpp"
 #include "command_handler.hpp"
 #include "config.hpp"
+#include "health.hpp"
 #include "input.hpp"
 #include "logging.hpp"
 #include "matrix.hpp"
@@ -107,6 +108,17 @@ int main(int argc, char* argv[]) {
     // through the shared argv-based process control (stop_app, too).
     dispatcher.set_app_launcher(tether::syscalls::make_app_launcher_with_processes(processes));
 
+    // add-health-telemetry (task 4.3): ONE sampler lives for the whole
+    // process, so uptime/reconnect counters and the rolling window survive
+    // every link. Cadence and span come from the config's telemetry section;
+    // the probe is the syscall layer's per-OS host implementation.
+    tether::syscalls::HealthState health(config.telemetry.interval_s,
+                                         config.telemetry.window_s, steady_now_ms());
+    const std::unique_ptr<tether::syscalls::IHealthHostProbe> health_probe =
+        tether::syscalls::make_health_host_probe();
+    const std::shared_ptr<tether::syscalls::ITelemetryControl> telemetry =
+        tether::syscalls::make_health_telemetry_control(health, *health_probe);
+
     for (;;) {
         std::unique_ptr<transport::TcpAgentLink> link;
         try {
@@ -118,8 +130,9 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         // The dispatcher outlives every link, so install is safe across
-        // redials (the handler runs only inside its own session's pump).
-        tether::agent::install_commands(dispatcher, *link);
+        // redials (the handler runs only inside its own session's pump); the
+        // telemetry control wraps the same process-wide sampler every time.
+        tether::agent::install_commands(dispatcher, *link, telemetry);
         transport::TransportMillis now = steady_now_ms();
         log.info("dial-out connected; starting session",
                  {{"agent", identity.name}, {"state", protocol::session_state_name(link->state())}});

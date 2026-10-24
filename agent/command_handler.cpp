@@ -10,6 +10,7 @@
 #include <exception>
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace tether::agent {
 
@@ -142,6 +143,21 @@ void install_commands(syscalls::CommandDispatcher& dispatcher,
                                },
                                seq, command, is_cancelled);
         });
+}
+
+void install_commands(syscalls::CommandDispatcher& dispatcher, protocol::AgentSession& session,
+                      std::shared_ptr<syscalls::ITelemetryControl> telemetry) {
+    // The dispatcher outlives sessions; the sampler control (and the
+    // HealthState it wraps) does too, so the bound family survives redials.
+    dispatcher.set_telemetry_control(std::move(telemetry));
+    install_commands(dispatcher, session);
+}
+
+void install_commands(syscalls::CommandDispatcher& dispatcher,
+                      tether::transport::TcpAgentLink& link,
+                      std::shared_ptr<syscalls::ITelemetryControl> telemetry) {
+    dispatcher.set_telemetry_control(std::move(telemetry));
+    install_commands(dispatcher, link);
 }
 
 } // namespace tether::agent

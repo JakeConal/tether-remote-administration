@@ -136,9 +136,12 @@ add_test(NAME camera-family-test COMMAND tether-camera-tests)
 
 # Tasks 6.1-6.3 wiring: the dispatcher behind a REAL session pair over
 # in-memory pipes (fakes for process, real temporary disk for file).
+# add-health-telemetry task 4.3 rides the same harness and parses the health
+# snapshot with nlohmann (test side only).
 add_executable(tether-command-session-tests command_session_test.cpp)
 target_link_libraries(tether-command-session-tests
-    PRIVATE doctest::doctest tether-command-handler tether-syscalls tether-common)
+    PRIVATE doctest::doctest tether-command-handler tether-syscalls tether-common
+            nlohmann_json::nlohmann_json)
 add_test(NAME command-session-test COMMAND tether-command-session-tests)
 
 # Task 6.7: the input family - keylogger job lifecycle on the shared registry,

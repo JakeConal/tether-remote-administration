@@ -13,12 +13,19 @@
 //    LAYER: an unconfirmed delete over the wire refuses with the disk
 //    meanwhile untouched, and the confirmed twin proceeds;
 //  - results stream as their structured shapes: listings become result text;
-//    argv travels byte-for-byte to the capability layer.
+//    argv travels byte-for-byte to the capability layer;
+//  - health (add-health-telemetry task 4.3): the telemetry family is bound
+//    through install_commands with the dial-loop-owned HealthState, and an
+//    issued `health` returns the design D5 JSON snapshot, parsed here, over
+//    the established session.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
 #include "command_handler.hpp"
+#include "health.hpp"
 #include "matrix.hpp"
+
+#include <nlohmann/json.hpp>
 
 #include <atomic>
 #include <filesystem>
@@ -103,6 +110,26 @@ struct FakeProcessControl final : tsys::IProcessControl {
         return 4242;
     }
     void stop(std::uint32_t) override { ++stop_calls; }
+};
+
+// The telemetry seam's fake: cumulative counters advance on every successful
+// read (HealthState diffs them into CPU); memory/process/thread values are
+// deterministic so the snapshot can be asserted after a real wire round trip.
+struct FakeHealthProbe final : tsys::IHealthHostProbe {
+    int read_calls = 0;
+
+    tsys::HostReading read() override {
+        ++read_calls;
+        const std::uint64_t step = static_cast<std::uint64_t>(read_calls);
+        tsys::HostReading reading;
+        reading.cpu_busy = step * 400; // 40% of the total delta
+        reading.cpu_total = step * 1000;
+        reading.memory_used = 512 + step;
+        reading.memory_total = 4096;
+        reading.processes = 40 + static_cast<std::uint32_t>(read_calls);
+        reading.threads = 100 + static_cast<std::uint32_t>(read_calls);
+        return reading;
+    }
 };
 
 std::atomic<int> g_dir_counter{0};
@@ -260,4 +287,54 @@ TEST_CASE("start argv arrives at the capability layer byte-for-byte over the wir
 
     REQUIRE(process->start_log.size() == 1);
     CHECK(process->start_log[0] == argv); // the metacharacters are data end to end
+}
+
+TEST_CASE("health over an established session is a parsable snapshot") {
+    std::shared_ptr<FakeProcessControl> process = std::make_shared<FakeProcessControl>();
+    tsys::CommandDispatcher dispatcher;
+    dispatcher.set_process_control(process);
+    dispatcher.set_file_system(tsys::make_file_system());
+
+    // The dial-loop-owned sampler: uptime anchored 9 s before the command and
+    // one reconnect already counted (the first establishment is the anchor).
+    FakeHealthProbe probe;
+    tsys::HealthState health(1, 60, tsys::steady_clock_millis() - 9000);
+    health.note_established(0);
+    health.note_established(1000);
+    const std::shared_ptr<tsys::ITelemetryControl> telemetry =
+        tsys::make_health_telemetry_control(health, probe);
+    telemetry->sample(); // baseline-only first tick
+    telemetry->sample(); // first CPU-bearing tick
+
+    const auto harness = Harness::connect();
+    tether::agent::install_commands(dispatcher, *harness->agent, telemetry);
+
+    const tp::CommandView view = harness->issue(tp::Cmd{"health", {}});
+    REQUIRE(view.status == tp::CommandStatus::Completed);
+    const std::string text = harness->text_of(view);
+    REQUIRE(!text.empty());
+    CHECK(text.back() == '\n'); // the adapter's line terminator
+
+    nlohmann::json snapshot;
+    REQUIRE_NOTHROW(snapshot = nlohmann::json::parse(text));
+    CHECK(snapshot.at("uptime_seconds").get<std::int64_t>() >= 9);
+    CHECK(snapshot.at("reconnects").get<unsigned>() == 1);
+    CHECK(snapshot.at("latest").at("cpu_percent").get<double>() == doctest::Approx(40.0));
+    CHECK(snapshot.at("latest").at("memory_used").get<std::uint64_t>() == 514);
+    CHECK(snapshot.at("latest").at("memory_total").get<std::uint64_t>() == 4096);
+    CHECK(snapshot.at("latest").at("processes").get<std::uint32_t>() == 42);
+    CHECK(snapshot.at("latest").at("threads").get<std::uint32_t>() == 102);
+    CHECK(snapshot.at("window").at("ticks").get<std::size_t>() == 2);
+    CHECK(snapshot.at("window").at("window_coverage").get<double>() > 0.0);
+    CHECK(snapshot.at("sample_age_ms").get<std::int64_t>() >= 0);
+    CHECK(snapshot.at("interval_s").get<int>() == 1);
+
+    // The arity gate rides the same session: refused, nothing sampled, and the
+    // session keeps serving.
+    const int reads_before = probe.read_calls;
+    const tp::CommandView refused = harness->issue(tp::Cmd{"health", {"1"}});
+    REQUIRE(refused.status == tp::CommandStatus::Failed);
+    CHECK(refused.error_code == "invalid_args");
+    CHECK(probe.read_calls == reads_before);
+    CHECK(harness->agent->state() == tp::SessionState::Established);
 }
