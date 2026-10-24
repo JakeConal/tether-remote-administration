@@ -141,10 +141,10 @@ start there for the reading paths that match what you are trying to do.
 | [docs/architecture.md](docs/architecture.md) | the two runtimes, the layering, the full command lifecycle, the thread model, the design decisions |
 | [docs/getting-started.md](docs/getting-started.md) | prerequisites, build, configure, first session, common setup mistakes |
 | [docs/developer-guide.md](docs/developer-guide.md) | source-tree map, per-module walkthrough, conventions, how to add a command / message type / family |
-| [docs/command-reference.md](docs/command-reference.md) | the three console verbs, the exit codes, all 19 commands with their argument contracts, the refusal codes, the two confirmation gates |
+| [docs/command-reference.md](docs/command-reference.md) | the four console verbs, the exit codes, all 20 commands with their argument contracts, the refusal codes, the two confirmation gates |
 | [docs/configuration.md](docs/configuration.md) | every config key of the console, the agent, the token store, and the Gmail credentials, with defaults and error text |
 | [docs/api-reference.md](docs/api-reference.md) | the public API of every library |
-| [docs/testing.md](docs/testing.md) | the test suites (27 doctest translation units, 37 CTest entries), how to run one test or one family, the CI topology, how to add a test |
+| [docs/testing.md](docs/testing.md) | the test suites (30 doctest translation units, 40 CTest entries), how to run one test or one family, the CI topology, how to add a test |
 | [docs/security.md](docs/security.md) | the threat model, the handshake, the controls, and the known limitations |
 | [docs/operations.md](docs/operations.md) | running the two runtimes, the failure matrix, the audit trail, hardening |
 | [docs/protocol.md](docs/protocol.md) | protocol v2 wire spec (envelope, message types, HMAC handshake, seq semantics), written to be implementable against alone and cross-checked against the codec tests |

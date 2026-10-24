@@ -36,8 +36,8 @@
 
 ## 7. End-to-end and docs
 
-- [ ] 7.1 Extend the end-to-end harness (`tests/families_e2e_test.cpp` style or a focused `health_e2e_test.cpp`): real console+agent pair, dial-in, poll health, snapshot shape check, forced redial observed by the monitor's counters, one audit record
-- [ ] 7.2 Update `docs/`: architecture.md (thread-model note: sampling ticks inline, no new thread), command-reference.md (`health` argument contract), operations.md (operator monitoring workflow with `monitor --json`), and the agent-vs-console example configs; verify each documented command/flag runs as written
+- [x] 7.1 Extend the end-to-end harness (`tests/families_e2e_test.cpp` style or a focused `health_e2e_test.cpp`): real console+agent pair, dial-in, poll health, snapshot shape check, forced redial observed by the monitor's counters, one audit record
+- [x] 7.2 Update `docs/`: architecture.md (thread-model note: sampling ticks inline, no new thread), command-reference.md (`health` argument contract), operations.md (operator monitoring workflow with `monitor --json`), and the agent-vs-console example configs; verify each documented command/flag runs as written
 - [ ] 7.3 Run the full test suite and a manual demo (console + agent loopback with a forced agent restart) to confirm monitor rendering, exit codes, and the audit trail end to end
 
 ## Workflow follow-up

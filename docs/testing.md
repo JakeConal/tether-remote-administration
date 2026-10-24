@@ -11,7 +11,7 @@ CI uses it.
 | --- | --- |
 | Framework | [doctest](https://github.com/doctest/doctest), single-header mode |
 | Driver | CTest — `add_test()` per suite |
-| Suites | 27 doctest translation units (26 standalone + the partitioned families-e2e TU) |
+| Suites | 30 doctest translation units (29 standalone + the partitioned families-e2e TU) |
 | Test cases | **240** `TEST_CASE` registrations at source level |
 | CTest entries | **37** (26 suites + 11 per-case e2e partitions) |
 | Helper executables | 2 (`tether-argv-probe`, `tether-capture-bench`) |
@@ -99,7 +99,7 @@ ctest --test-dir build -R envelope-test -V --output-on-failure -C Release
 | CTest name | File | Cases | Links | What it proves |
 | --- | --- | ---: | --- | --- |
 | `smoke` | `smoke.cpp` | 1 | protocol | The framework and the CTest integration work end to end. |
-| `config-test` | `config_test.cpp` | 21 | common | Every config field loads; every rejection names the file and the field. |
+| `config-test` | `config_test.cpp` | 25 | common | Every config field loads; every rejection names the file and the field. |
 | `logging-test` | `logging_test.cpp` | 3 | common | The record renders level, timestamp, message, and contextual fields; level filtering works. |
 | `envelope-test` | `envelope_test.cpp` | 14 | protocol | The byte layout, round-trips, arbitrary slice boundaries, truncation, oversize lengths, and the poison semantics. |
 | `payloads-test` | `payloads_test.cpp` | 16 | protocol | Strict per-type payload shapes for all 12 types; every malformed shape names the offending field. |
@@ -113,8 +113,10 @@ ctest --test-dir build -R envelope-test -V --output-on-failure -C Release
 | `cli-verb-test` | `cli_verb_test.cpp` | 9 | cli, protocol | Verb parsing, exit codes, and the dispatch contract against a fake console. |
 | `cli-stream-test` | `cli_stream_test.cpp` | 5 | cli, protocol | stdout carries results byte-exactly; stderr stays clean; an incomplete delivery is a failure. |
 | `cli-confirm-test` | `cli_confirm_test.cpp` | 6 | cli, protocol | The confirmation gate refuses with **zero dispatch calls** — the "nothing was sent" witness. |
-| `cli-integration-test` | `cli_integration_test.cpp` | 3 | cli, transport, protocol, common | The CLI driving the **real session stack** over live loopback sockets, including the dial-in budget. |
-| `matrix-test` | `matrix_test.cpp` | 8 | syscalls | The closed set, the refusals, and the "no system effect at all" instrument. |
+| `cli-integration-test` | `cli_integration_test.cpp` | 5 | cli, transport, protocol, common | The CLI driving the **real session stack** over live loopback sockets, including the dial-in budget and the monitor's restart/refusal paths. |
+| `cli-stats-test` | `cli_stats_test.cpp` | 3 | cli | The console-local latency sampler, counting byte decorators, and interval throughput math. |
+| `health-e2e-test` | `health_e2e_test.cpp` | 1 | cli, command-handler, syscalls, protocol, transport, common | The full health path over **real loopback**: `exec health`, `monitor --json` across a forced redial, and the single audit record. |
+| `matrix-test` | `matrix_test.cpp` | 14 | syscalls | The closed set, the refusals, the health/telemetry row, and the "no system effect at all" instrument. |
 | `process-family-test` | `process_family_test.cpp` | 6 | syscalls | The **real** per-OS process family: argv arrives verbatim, stop works, failures are structured. |
 | `file-family-test` | `file_family_test.cpp` | 11 | syscalls | The **real** file family on temporary disk trees, with the agent-layer confirmation gate. |
 | `power-family-test` | `power_family_test.cpp` | 5 | syscalls | The refusal path against the real per-OS family; the confirmed path against an injected backend only. |
@@ -123,7 +125,8 @@ ctest --test-dir build -R envelope-test -V --output-on-failure -C Release
 | `command-session-test` | `command_session_test.cpp` | 5 | command-handler, syscalls, common | The dispatcher behind a real session pair over in-memory pipes. |
 | `input-family-test` | `input_family_test.cpp` | 13 | syscalls | The keylogger job lifecycle, configurable storage, the keyboard-lock state, and the Wayland refusal. |
 | `app-family-test` | `app_family_test.cpp` | 3 | syscalls | `.lnk` / `.desktop` listing, argv-resolved launches, and stop reuse. |
-| `audit-test` | `audit_test.cpp` | 21 | cli, common | The JSONL store, the query API, the CLI record hooks, persistence, and strict re-open. |
+| `audit-test` | `audit_test.cpp` | 24 | cli, common | The JSONL store, the query API, the CLI record hooks, monitor/health audit coverage, persistence, and strict re-open. |
+| `health-test` | `health_test.cpp` | 12 | syscalls | The pure sampler engine: baseline-only first tick, window fill/drain, aggregates, staleness, cadence, snapshot JSON, and the real per-OS probe smoke. |
 | `families-e2e-*` (11 entries) | `families_e2e_test.cpp` | 11 | cli, command-handler, syscalls, protocol, transport, common | Every command family over the **real loopback stack**, per case. |
 
 ### Helper executables (not ctest entries)
@@ -310,10 +313,11 @@ TEST_CASE("the outcome of a new behaviour is explicit") {
 | Transport interface, TCP, Gmail, equivalence | `tcp-loopback-test`, `gmail-test`, `transport-equiv-test` |
 | Verbs, exit codes, streams, confirmation | `cli-verb-test`, `cli-stream-test`, `cli-confirm-test`, `cli-integration-test` |
 | The closed set and the capability matrix | `matrix-test` |
-| Each command family | `process-family-test`, `file-family-test`, `power-family-test`, `capture-family-test`, `camera-family-test`, `input-family-test`, `app-family-test` |
+| Each command family | `process-family-test`, `file-family-test`, `power-family-test`, `capture-family-test`, `camera-family-test`, `input-family-test`, `app-family-test`, `health-test` |
+| Telemetry and monitoring | `health-test`, `health-e2e-test`, `cli-stats-test`, `audit-test` |
 | The dispatcher behind a real session | `command-session-test` |
 | The audit trail | `audit-test` |
-| Every family over the real stack | `families-e2e-*` (11 partitions) |
+| Every family over the real stack | `families-e2e-*` (11 partitions), `health-e2e-test` |
 | Configuration, logging, base64 | `config-test`, `logging-test`, `base64-test` |
 
 The wire specification in [protocol.md](protocol.md) ends with a **rule → test

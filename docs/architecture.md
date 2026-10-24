@@ -103,13 +103,13 @@ power family, `shutdown` refuses as `unsupported_platform` rather than
 
 ## 5. The capability matrix
 
-`kCommandSet` in `lib/syscalls/matrix.cpp` is the closed set of 19 verbs across
-7 families. Each row is pure data:
+`kCommandSet` in `lib/syscalls/matrix.cpp` is the closed set of 20 verbs across
+8 families. Each row is pure data:
 
 ```
 struct CommandSpec {
     const char* verb;     // the wire command word
-    Family family;        // Process | File | Power | Capture | Camera | App | Input
+    Family family;        // Process | File | Power | Capture | Camera | App | Input | Telemetry
     bool destructive;     // the agent-layer confirmation gate applies
     bool on_windows;
     bool on_linux;
@@ -117,7 +117,7 @@ struct CommandSpec {
 ```
 
 In the shipped table **every cell of every family × platform pair is
-supported** — 19 verbs on both Windows and Linux. Platform gaps are not
+supported** — 20 verbs on both Windows and Linux. Platform gaps are not
 expressed as matrix rows; they are raised at runtime from inside the family
 as a structured `unsupported_platform` refusal (for example, the input family
 on a Wayland-only host).
@@ -134,6 +134,7 @@ The five destructive rows are `delete`, `move`, `copy`, `shutdown`, `restart`.
 | Camera | `start_webcam` `stop_webcam` | OpenCV `VideoCapture` (DirectShow/MSMF) | OpenCV `VideoCapture` (V4L2) |
 | Input | `start_keylogger` `stop_keylogger` `lock_keyboard` `unlock_keyboard` | `WH_KEYBOARD_LL` hook, `BlockInput` | `XQueryKeymap`, `XGrabKeyboard` |
 | App | `list_app` `start_app` `stop_app` | Start-menu `.lnk` via `IShellLinkW` | freedesktop `.desktop` entries |
+| Telemetry | `health` | `GetSystemTimes`, `GlobalMemoryStatusEx`, Toolhelp32 | `/proc/stat`, `/proc/meminfo`, `/proc/loadavg`, `/proc` walk |
 
 See [command-reference.md](command-reference.md) for the argument contract of
 each verb.
@@ -201,6 +202,11 @@ Two invariants the tests pin:
 
 The agent's own main thread does everything: connect, handshake, pump, dispatch.
 There is **no thread pool and no work queue**. The pump cadence is 10 ms.
+
+Health telemetry adds **no thread and no queue** either. The sampler's
+`pump()` is called from this same loop (and from the dial-retry wait slices),
+samples once per configured `telemetry.interval_s`, and keeps its rolling
+window as plain in-memory state on the main thread.
 
 ![The agent main thread, and where background jobs add their own.](diagrams/assets/agent-thread-model.png)
 
@@ -291,7 +297,7 @@ The token **never crosses the wire** and is never logged. See
 | Poisoning the stream on a framing violation | Alignment is unrecoverable; better a loud failure than a misread | `lib/protocol/envelope.cpp` |
 | Arguments as argv arrays | Never re-join into a shell line; metacharacters are file names | `lib/protocol/payloads.cpp`, `lib/syscalls/process.cpp` |
 | Two independent confirmation gates | The console refuses locally (nothing sent) for `delete`/`shutdown`/`restart`, *and* the agent refuses (nothing executed) for all five destructive verbs | `console/cli.cpp`, `lib/syscalls/matrix.cpp` |
-| A closed 19-verb command set | The refusal of an unknown verb is structured and auditable | `lib/syscalls/matrix.cpp` |
+| A closed 20-verb command set | The refusal of an unknown verb is structured and auditable | `lib/syscalls/matrix.cpp` |
 | Capabilities behind interfaces + a shared job registry | Testable with fakes; one managed lifecycle for every background job | `lib/syscalls/*.hpp`, `lib/syscalls/jobs.hpp` |
 | `std::filesystem` for both OSes in the file family | One implementation, one set of error codes, cross-platform parity | `lib/syscalls/file.cpp` |
 | `dlopen` sd-bus instead of linking libsystemd | libsystemd becomes a *runtime* dependency; the build needs no systemd headers | `lib/syscalls/power.cpp` |

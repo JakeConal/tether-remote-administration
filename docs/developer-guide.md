@@ -266,7 +266,7 @@ is destructive, add it to `kDestructiveCommands` so the **console** gate
 applies too. Both gates must be listed, or the command is only half-gated.
 
 **Step 6 — tests** (`tests/matrix_test.cpp`): the matrix suite asserts
-`set.size() == 19`. Update that number and add the new verb's cases. Add a
+`set.size() == 20`. Update that number and add the new verb's cases. Add a
 family suite if the verb has real behaviour.
 
 ### 4.2 Add a protocol message type

@@ -37,7 +37,7 @@ describes behaviour, the behaviour is enforced by a test (see
 | [architecture.md](architecture.md) | Layering, the two runtimes, the full command lifecycle, module responsibilities, thread model, design decisions |
 | [getting-started.md](getting-started.md) | Prerequisites, build, configure, first session, common setup mistakes |
 | [developer-guide.md](developer-guide.md) | Source-tree map, per-module walkthrough, coding conventions, how to add a command / message type / family, review checklist |
-| [command-reference.md](command-reference.md) | Console verbs, exit codes, all 19 commands with their argument contracts, refusal codes, the two confirmation gates |
+| [command-reference.md](command-reference.md) | Console verbs, exit codes, all 20 commands with their argument contracts, refusal codes, the two confirmation gates |
 | [configuration.md](configuration.md) | Every config key of the console, the agent, the token store, and the Gmail credentials file, with defaults and error text |
 | [api-reference.md](api-reference.md) | Public API of `tether-common`, `tether-protocol`, `tether-transport`, `tether-syscalls`, `tether-cli`, `tether-command-handler` |
 | [testing.md](testing.md) | Complete suite inventory, how to run one test / one family / everything, CI topology, how to add a test |

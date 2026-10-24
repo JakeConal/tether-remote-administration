@@ -87,6 +87,16 @@ add_executable(tether-cli-stats-tests cli_stats_test.cpp)
 target_link_libraries(tether-cli-stats-tests PRIVATE doctest::doctest tether-cli)
 add_test(NAME cli-stats-test COMMAND tether-cli-stats-tests)
 
+# add-health-telemetry (task 7.1): the focused health end-to-end scenario. The
+# real console+agent stack (run_cli, TCP session, command handler, dispatcher,
+# telemetry family, HealthState) with only the host probe injected, so the
+# snapshot is deterministic while the wire and command paths stay production.
+add_executable(tether-health-e2e-tests health_e2e_test.cpp)
+target_link_libraries(tether-health-e2e-tests PRIVATE
+    doctest::doctest tether-cli tether-command-handler tether-syscalls
+    tether-protocol tether-transport tether-common nlohmann_json::nlohmann_json)
+add_test(NAME health-e2e-test COMMAND tether-health-e2e-tests)
+
 # Phase 6: commands and capability matrix (appended per task 6.1-6.4; one TU
 # per suite). tether-argv-probe is not a test: it is the tiny child the
 # process-family suite launches to observe argv verbatim.
@@ -231,6 +241,7 @@ set_tests_properties(
     cli-confirm-test cli-integration-test cli-stats-test matrix-test process-family-test
     file-family-test power-family-test capture-family-test camera-family-test
     command-session-test input-family-test app-family-test audit-test
+    health-e2e-test
     PROPERTIES TIMEOUT 600)
 # Each per-case e2e test runs in << 2 s when healthy. The TIMEOUTs here are
 # the outer backstop: the test binary's own watchdog (tests/families_e2e_test.cpp,

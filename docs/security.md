@@ -92,7 +92,7 @@ pins it against the real per-OS implementations.
 
 ### The closed command set
 
-Only 19 verbs exist, matched **exactly and case-sensitively**. Anything else
+Only 20 verbs exist, matched **exactly and case-sensitively**. Anything else
 is refused with `unknown_command` before a single capability is touched. There
 is no pass-through, no "run this shell command", and no plugin mechanism.
 

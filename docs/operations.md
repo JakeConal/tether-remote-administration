@@ -50,22 +50,66 @@ WantedBy=multi-user.target
 
 ### The console (operator machine)
 
-The console is one invocation = one verb. Script it.
+The console is one invocation = one verb. Script it, or keep a monitor
+invocation alive for a standing view.
 
 ```console
 $ tether-console --config /etc/tether/console.json agents
 $ tether-console --config /etc/tether/console.json exec lab-1 ls /etc
 ```
 
-Each invocation binds the listener, waits for the agent's dial-in, serves the
-verb, and exits. Because the agent dials on a backoff, **the first invocation
-after a console restart may need to wait** — the default `agent_dial_wait_ms`
-of 10,000 ms covers the agent's re-dial cadence (it retries at most every
-10 s).
+Each short-lived invocation binds the listener, waits for the agent's dial-in,
+serves the verb, and exits. Because the agent dials on a backoff, **the first
+invocation after a console restart may need to wait** — the default
+`agent_dial_wait_ms` of 10,000 ms covers the agent's re-dial cadence (it
+retries at most every 10 s).
 
 For a scripted batch, invoke the console once per verb and accept the
 per-invocation wait, or raise `agent_dial_wait_ms` to cover the worst-case
 backoff (10,000 ms) plus a margin.
+
+### Monitoring a live target
+
+`monitor` is the long-lived form of the console: it keeps one invocation alive,
+re-issues `health` once per second while a session exists, and streams one
+observation per interval until interrupted.
+
+```console
+$ tether-console --config /etc/tether/console.json monitor lab-1
+$ tether-console --config /etc/tether/console.json monitor lab-1 --json
+```
+
+The human shape is one readable line per second (the values below are
+illustrative):
+
+```
+lab-1 cpu=12.5% mem=7.6 GiB/16.0 GiB proc=244 thr=3187 age=120ms win=60/60s cov=100.0% poll=3ms p50=4ms net=1.2 KiB/s link_up=2m10s link_reconnects=0
+```
+
+- Observations go to **stdout**; `status:` lines and errors go to **stderr**.
+- `cpu`, `mem`, `proc`, `thr`, `age`, `win`, and `cov` come from the agent's
+  `health` snapshot. `poll`, `p50`, `net`, `link_up`, and `link_reconnects` are
+  measured locally by the console.
+- If the agent restarts, the monitor prints
+  `status: agent 'lab-1' unavailable; waiting for re-registration`, keeps the
+  listener open, and resumes when the agent re-dials. `link_reconnects`
+  increments; no operator action is needed.
+- **Ctrl-C / Ctrl-Break** stops it with **exit 0**. A health poll refused with
+  `unknown_command` (a pre-telemetry agent) stops it with **exit 4**; a setup
+  or transport failure that ends the invocation is **exit 1**.
+- `--json` emits one self-contained object per line, so it can be piped
+  directly:
+
+  ```sh
+  tether-console --config /etc/tether/console.json monitor lab-1 --json \
+    | jq -c 'select(.status == "ok") | {t: .observed_at_ms, cpu: .health.latest.cpu_percent, age: .health.sample_age_ms}'
+  ```
+
+- The invocation writes **one** audit record for itself. Its internal health
+  polls are not audited individually; an operator-issued
+  `tether-console exec lab-1 health` is audited normally.
+- The sampling cadence and window live in the **agent's** optional `telemetry`
+  section (`interval_s`, `window_s`); the console config needs no new keys.
 
 ---
 
@@ -116,6 +160,13 @@ tail -f /var/lib/tether/audit.jsonl | jq -c '{time, agent, command, outcome}'
 **`seq: 0` means nothing was dispatched** — a local refusal, a lost session,
 or a transport failure. A non-zero `seq` means the command reached the agent.
 
+A `monitor` invocation is a single audited action: one record with
+`command: "monitor"`, `parameters: ["lab-1", "health"]`, `seq: 0`, and a
+`detail` carrying `duration_ms`, `end_state`, `observations`, and
+`reconnects_observed`. The internal one-second health polls are deliberately
+below the audit emit point. An operator-issued `exec lab-1 health` is an
+ordinary audited command.
+
 ### The console's stdout/stderr split
 
 | Stream | Use it for |
@@ -135,10 +186,13 @@ progress channel.
 | `error: command outcome unavailable (agent session lost)`, exit 1 | console stderr | The session was lost before the command reached a terminal state | The agent will redial; retry |
 | `error: command never reached a terminal outcome`, exit 1 | console stderr | The dispatch returned without a terminal status | The session is in an unexpected state; check the logs |
 | `error: audit setup failed: …`, exit 1 | console stderr | The audit store could not be opened or re-opened | Fix the `audit_path` — the console refuses to run unaudited |
-| `error: unknown verb '<x>'` | console stderr, exit 2 | The verb is not `agents`, `exec`, or `cancel` | Check the verb |
+| `error: unknown verb '<x>'` | console stderr, exit 2 | The verb is not `agents`, `exec`, `monitor`, or `cancel` | Check the verb |
 | `error: unknown agent '<x>'`, exit 3 | console stderr | The agent had not registered within `agent_dial_wait_ms` | Start the agent first; or raise the budget |
 | `error: refusal: '<cmd>' … not confirmed`, exit 4 | console stderr | The console gate was not satisfied | Add `--yes` (and the literal `confirm` argument) |
 | `error: command failed: <code>[: detail]`, exit 1 | console stderr | The agent refused or the command failed | The code is in the [refusal taxonomy](command-reference.md#5-refusal-codes) |
+| `command failed: sample_unavailable[: detail]` | command result (exit 1 for `exec`; an `error` observation in `monitor`) | No healthy host sample exists yet, or the latest probe attempt failed | Check the agent's host interfaces/logs; retry. The agent never substitutes zeros. |
+| `status: agent 'lab-1' unavailable; waiting for re-registration` | `monitor` stderr | No live session right now | Expected during an agent restart; the monitor resumes automatically |
+| `error: refusal: 'lab-1' cannot serve 'health' (unknown_command)`, exit 4 | `monitor` stderr | The agent predates the telemetry verb | Upgrade the agent |
 | `error: command cancelled (seq N)`, exit 1 | console stderr | The command was cancelled | — |
 | `error: file delivery incomplete: expected N bytes, received M`, exit 1 | console stderr | The transfer was short | The session probably dropped mid-transfer; retry |
 | `error: console setup failed: …`, exit 1 | console stderr | The config or the token store is bad | The message names the file and the field |
@@ -253,9 +307,9 @@ jq -r '[.time, .agent, .command, .outcome, (.detail // "")] | @tsv' \
 - Keep the `gmail` section `null` unless the mail slow path is wanted.
 - The audit trail is append-only **by convention**; enforce that with
   filesystem permissions, not with the application.
-- The console binds its port for the duration of one invocation. If the port
-  is taken, the invocation fails with `console setup failed` — check for
-  another process on that port.
+- The console binds its port for the duration of one invocation (for
+  `monitor`, until interrupted). If the port is taken, the invocation fails
+  with `console setup failed` — check for another process on that port.
 
 ---
 

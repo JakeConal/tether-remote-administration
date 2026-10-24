@@ -1,7 +1,7 @@
 # Command reference
 
 Every verb the console accepts, every exit code, and the full contract of the
-19 commands the agent can execute.
+20 commands the agent can execute.
 
 ---
 
@@ -16,7 +16,7 @@ A known consequence: a command argument literally named `--config` is consumed
 by the global parser and can never reach the agent. The same is true of
 `--yes` on the `exec` verb.
 
-The verb must be one of exactly three. Anything else fails with
+The verb must be one of exactly four. Anything else fails with
 `error: unknown verb '<verb>'` and **exit code 2**, before any config file is
 read, any console is built, and anything is audited.
 
@@ -24,6 +24,7 @@ read, any console is built, and anything is audited.
 | --- | --- | --- |
 | `agents` | `tether-console agents` | List the registry: one `<identity> <state>` row per agent. |
 | `exec` | `tether-console exec <agent> <command> [args...] [--yes]` | Run one command on one agent. |
+| `monitor` | `tether-console monitor <agent> [--json]` | Stream observations of one agent until interrupted. |
 | `cancel` | `tether-console cancel <agent> <seq>` | Cancel an in-flight command by its seq. |
 
 ### `agents`
@@ -66,6 +67,37 @@ $ tether-console --config console.json exec lab-1 delete confirm /tmp/x --yes
 3. Dispatch.
 4. Terminal status handling → exit 0 or 1.
 
+### `monitor`
+
+```
+$ tether-console --config console.json monitor lab-1
+$ tether-console --config console.json monitor lab-1 --json
+```
+
+- The long-lived console form: it binds the listener, waits for the agent's
+  dial-in without a deadline, re-issues `health` once per second while a live
+  session exists, and exits only when interrupted.
+- **stdout** is the observation stream: one line per cadence. The human shape
+  carries `cpu=`, `mem=`, `proc=`, `thr=`, `age=`, `win=`, `cov=` from the
+  agent snapshot plus console-local `poll=`, `p50=`, `net=`, `link_up=`, and
+  `link_reconnects=`.
+- `--json` emits one self-contained JSON object per line with `agent`,
+  `observed_at_ms`, `status` (`ok` / `unavailable` / `error`), `health` (the
+  exact snapshot on `ok`), an optional `error` object, `console` (latency,
+  throughput, uptime, reconnects), and `observations` (the running count).
+- When the target drops, the monitor prints `<agent> unavailable` and keeps
+  waiting. When the agent re-dials and re-registers during the same
+  invocation, it prints `... is back; resuming observations`, increments
+  `link_reconnects`, and resumes without operator action.
+- **Ctrl-C / Ctrl-Break** stops it with **exit 0**. A health poll refused
+  with `unknown_command` (a pre-telemetry agent) stops it with **exit 4**; a
+  setup or transport failure that ends the invocation is **exit 1**; malformed
+  arguments are **exit 2**.
+- The invocation writes **one** audit record (`command: monitor`, parameters
+  `[<agent>, "health"]`, seq 0); its internal health polls are deliberately
+  unaudited. An operator-issued `exec <agent> health` remains audited per
+  issue.
+
 ### `cancel`
 
 ```
@@ -84,11 +116,11 @@ status: cancel sent for seq 7
 
 | Code | Constant | Meaning |
 | ---: | --- | --- |
-| `0` | `kExitOk` | Success. |
-| `1` | `kExitFailure` | Command failure, transport failure, or console setup failure. |
+| `0` | `kExitOk` | Success, including an operator-interrupted monitor. |
+| `1` | `kExitFailure` | Command failure, transport failure, monitor error ending, or console setup failure. |
 | `2` | `kExitUsage` | Unknown verb or malformed arguments. Nothing was dispatched. |
 | `3` | `kExitUnknownAgent` | Unknown agent, detected before any dispatch. |
-| `4` | `kExitRefused` | Unconfirmed destructive command. Nothing was sent. |
+| `4` | `kExitRefused` | Unconfirmed destructive command, or a monitor whose health poll was refused with `unknown_command`. Nothing was executed. |
 
 ### Stream discipline
 
@@ -106,7 +138,7 @@ a truncated delivery is a **failure**, not a partial success.
 
 ## 2. The closed command set
 
-Nineteen verbs across seven families. Matching is **exact and
+Twenty verbs across eight families. Matching is **exact and
 case-sensitive** — `List` is outside the set and is refused with
 `unknown_command`.
 
@@ -131,12 +163,14 @@ case-sensitive** — `List` is outside the set and is refused with
 | `list_app` | app | — | 0 | ✅ | One `<name> <path>` line per entry |
 | `start_app` | app | — | 1 | ✅ | `started pid <pid>` |
 | `stop_app` | app | — | 1 | ✅ | Same as `stop` |
+| `health` | telemetry | — | 0 | ✅ | One single-line JSON snapshot (see §3) |
 
 Every command in the closed set is implemented and pinned by an automated
 test. The "Confirmed" column names the suite per family: `process-family-test`,
 `file-family-test`, `power-family-test`, `capture-family-test`,
-`camera-family-test`, `input-family-test`, `app-family-test` — and
-`families-e2e-test` runs every family end to end over real loopback sockets.
+`camera-family-test`, `input-family-test`, `app-family-test`, `health-test` —
+and `families-e2e-test` plus `health-e2e-test` run the families end to end over
+real loopback sockets.
 The one deliberate exception: the power family's *refusal* path runs against
 the real per-OS backend, but a *confirmed* call uses an injected backend — no
 test ever triggers a real power transition.
@@ -351,6 +385,40 @@ delivered as an honest **zero-byte** file, not as an error.
 **`stop_app <pid|name>`** — exactly one argument, identical semantics to
 `stop`. It reuses the same `IProcessControl` instance as the process family.
 
+### Telemetry family
+
+**`health`** — no arguments. Returns one single-line JSON object: the latest
+sample, the rolling-window aggregates, and the counters needed to judge
+freshness.
+
+```json
+{"uptime_seconds":42,"reconnects":0,"latest":{"cpu_percent":12.5,"memory_used":8123456789,"memory_total":17179869184,"processes":244,"threads":3187,"sampled_at_ms":123456},"window":{"span_seconds":60,"ticks":60,"cpu_percent_avg":18.2,"cpu_percent_max":74.0,"memory_used_max":8323456789,"window_coverage":1.0},"sample_age_ms":240,"interval_s":1}
+```
+
+- **`latest`** is the most recent sample: `cpu_percent` (0–100, or `null` on
+  the baseline-only first tick), `memory_used` / `memory_total` in bytes,
+  `processes`, `threads`, and `sampled_at_ms` on the agent's monotonic clock.
+- **`window`** covers the configured span: `span_seconds`, `ticks`,
+  `cpu_percent_avg`, `cpu_percent_max`, `memory_used_max`, and
+  `window_coverage` (ticks / expected ticks, 0–1). The CPU aggregate keys are
+  omitted until at least one post-baseline sample exists; they are never
+  zero-filled.
+- **`uptime_seconds`** counts from agent process start, and **`reconnects`**
+  counts successful re-registrations after the first establishment. Both
+  survive console disconnects; the window itself is memory and clears on an
+  agent process restart.
+- **`sample_age_ms`** is the age of `latest` at render time. `health` never
+  forces a sample, so a delayed sampler is visible rather than hidden;
+  `window_coverage` is the companion signal for a partially filled window.
+- Sampling runs inline in the agent's pump loop at `telemetry.interval_s`
+  (default 1) over `telemetry.window_s` (default 60); it continues while no
+  console session exists, including dial-retry waits. See
+  [configuration.md](configuration.md).
+- Refusals: `invalid_args` when any argument is supplied; `sample_unavailable`
+  when no sample has been taken yet or the latest host probe attempt failed.
+  `sample_unavailable` is a **failure** (audit outcome `failed`), never a
+  zero-filled snapshot.
+
 ---
 
 ## 4. The two confirmation gates
@@ -430,6 +498,7 @@ machine-readable; the message is human detail.
 | `directory_not_empty` | The file family | Recursive deletion is not offered. |
 | `cross_device` | The file family | A cross-device move was refused. |
 | `execute_failed` | A family | The operation failed for a reason with no better classification. |
+| `sample_unavailable` | The telemetry family | No healthy host sample exists yet (nothing sampled, or the latest probe attempt failed). |
 | `internal_error` | The dispatcher | An unexpected exception escaped a family. |
 
 The refusal vocabulary is declared in `lib/syscalls/matrix.hpp` and
