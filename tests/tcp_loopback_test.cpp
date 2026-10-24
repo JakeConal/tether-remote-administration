@@ -327,6 +327,20 @@ TEST_CASE("dial-out with a bounded budget fails explicitly on an unreachable con
                     tt::TransportError);
 }
 
+TEST_CASE("dial-out backoff waits keep invoking the caller's tick hook") {
+    // The agent passes its cadence-gated health pump here, so sampling
+    // survives a console outage (health-telemetry spec). One 20 ms backoff
+    // wait must be sliced into 10 ms ticks.
+    const tt::AgentEndpoint dead{"127.0.0.1", 1};
+    const tt::DialPolicy fast{20, 20};
+    int ticks = 0;
+    CHECK_THROWS_AS(tt::establish_with_retries(dead, {"agent-1", "host-1"}, "tok",
+                                               loopback_config(), fast, /*max_attempts=*/2,
+                                               [&ticks] { ++ticks; }),
+                    tt::TransportError);
+    CHECK(ticks == 2);
+}
+
 // ---- live loopback --------------------------------------------------------------
 
 // The seq-to-view join goes through the registry's live session (P3 owns the

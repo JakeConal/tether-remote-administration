@@ -6,8 +6,9 @@
 // agent-self counters (uptime / reconnects), the staleness bookkeeping, and
 // every piece of aggregate math. It does NOT sample anything: tick(now,
 // reading) is fed raw host counter readings by the caller (phase 3 adds the
-// OSbacked IHealthHostProbe implementations; the agent's established-session
-// pump loop drives the cadence, D3 - no thread, no queue).
+// OS-backed IHealthHostProbe implementations; the agent's pump loop drives
+// the cadence, D3 - no thread, no queue - including the dial-wait slices, so
+// the window keeps moving while the console is unreachable).
 //
 // Layer rules honored: no common/protocol/transport headers are included
 // (tether-syscalls stays self-contained), so the constructor takes the
@@ -107,6 +108,9 @@ public:
     // across every session establishment and redial.
     HealthState(int interval_s, int window_s, HealthMillis started_at);
 
+    // The clamped cadence in seconds; the control's pump gate uses it.
+    int interval_s() const noexcept { return interval_s_; }
+
     // One successful session establishment. The FIRST call is the anchor and
     // contributes no reconnect; every later call (a true re-registration
     // after a drop) increments the reconnect count.
@@ -153,10 +157,10 @@ private:
 
 // ---- the dispatcher-facing telemetry surface (task 4.2) --------------------
 //
-// The agent's pump loop calls sample() at the configured cadence (task 5.2);
-// the `health` family call renders snapshot() on demand. Keeping sampling and
-// rendering apart preserves D3's inline tick: the command path never
-// fabricates freshness, and the window's tick cadence stays exactly the
+// The agent's pump loop drives pump() (task 5.2), the cadence-gated form of
+// sample(); the `health` family call renders snapshot() on demand. Keeping
+// sampling and rendering apart preserves D3's inline tick: the command path
+// never fabricates freshness, and the window's tick cadence stays exactly the
 // configured interval (an extra sample per poll would silently halve the
 // window's wall span).
 //
@@ -173,9 +177,17 @@ class ITelemetryControl {
 public:
     virtual ~ITelemetryControl() = default;
 
-    // One host sample into the rolling window. The caller owns the cadence.
-    // Never throws: a failed attempt is remembered for snapshot() to refuse.
+    // One host sample into the rolling window. Explicit form for callers that
+    // own their own cadence (tests and one-off samples). Never throws: a
+    // failed attempt is remembered for snapshot() to refuse.
     virtual void sample() = 0;
+
+    // Cadence-gated variant for the pump loop (task 5.2): takes one sample
+    // when at least interval_s has elapsed since the previous due tick and
+    // does nothing otherwise. Never throws. A late tick samples exactly once
+    // and re-anchors the cadence from now (catching up would feed several
+    // same-instant readings into the CPU diff and fabricate percentages).
+    virtual void pump() = 0;
 
     // The design D5 snapshot JSON (single line). Throws
     // SyscallError("sample_unavailable", ...) when the latest sampling
@@ -190,6 +202,7 @@ public:
     HealthTelemetryControl(HealthState& state, IHealthHostProbe& probe,
                            std::function<HealthMillis()> clock);
     void sample() override;
+    void pump() override;
     std::string snapshot() override;
 
 private:
@@ -197,6 +210,7 @@ private:
     IHealthHostProbe& probe_;
     std::function<HealthMillis()> clock_;
     std::string last_failure_; // empty == the latest attempt succeeded (or none yet)
+    HealthMillis next_due_ms_ = 0; // first pump is immediately due
 };
 
 std::shared_ptr<ITelemetryControl> make_health_telemetry_control(

@@ -23,8 +23,8 @@
 
 ## 5. Agent loop wiring
 
-- [ ] 5.1 Add `started_at`/`reconnects` counters in `agent/main.cpp`'s dial loop that outlive each link and increment on every successful re-establish; verify in a redial-flow test that reconnect count and uptime survive session churn
-- [ ] 5.2 Insert the interval/window-driven sampling tick into the established-session pump loop; verify with a short interval run over the loopback harness that the window fills while commands interleave and that later snapshots reflect delayed ticks (coverage/age fields) rather than frozen values
+- [x] 5.1 Add `started_at`/`reconnects` counters in `agent/main.cpp`'s dial loop that outlive each link and increment on every successful re-establish; verify in a redial-flow test that reconnect count and uptime survive session churn
+- [x] 5.2 Insert the interval/window-driven sampling tick into the established-session pump loop; verify with a short interval run over the loopback harness that the window fills while commands interleave and that later snapshots reflect delayed ticks (coverage/age fields) rather than frozen values
 
 ## 6. Console monitor
 

@@ -369,7 +369,8 @@ std::unique_ptr<TcpAgentLink> establish_with_retries(const AgentEndpoint& endpoi
                                                      const std::string& token,
                                                      const protocol::SessionConfig& session,
                                                      DialPolicy policy,
-                                                     std::size_t max_attempts) {
+                                                     std::size_t max_attempts,
+                                                     std::function<void()> on_retry_wait) {
     std::int64_t backoff = 0;
     std::size_t attempt = 0;
     for (;;) {
@@ -391,7 +392,19 @@ std::unique_ptr<TcpAgentLink> establish_with_retries(const AgentEndpoint& endpoi
         Logger::instance().info("dial-out backed off",
                                 {{"agent", identity.name},
                                  {"backoff_ms", std::to_string(backoff)}});
-        std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
+        // Slice the wait so the caller's inline work (health sampling) keeps
+        // its cadence through a console outage; an empty hook keeps the
+        // original single-sleep behavior exactly.
+        constexpr std::int64_t kSliceMs = 10;
+        if (!on_retry_wait) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
+        } else {
+            for (std::int64_t elapsed = 0; elapsed < backoff; elapsed += kSliceMs) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(
+                    std::min(kSliceMs, backoff - elapsed)));
+                on_retry_wait();
+            }
+        }
     }
 }
 

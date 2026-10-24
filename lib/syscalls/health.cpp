@@ -217,6 +217,18 @@ void HealthTelemetryControl::sample() {
     }
 }
 
+void HealthTelemetryControl::pump() {
+    const HealthMillis now = clock_();
+    if (now < next_due_ms_) {
+        return; // still inside the current cadence step
+    }
+    sample();
+    // Re-anchor at this tick, not on the missed cadence grid: a delayed loop
+    // samples once and then resumes at the configured interval. Several
+    // catch-up samples at the same instant would fabricate CPU deltas.
+    next_due_ms_ = now + static_cast<HealthMillis>(state_.interval_s()) * 1000;
+}
+
 std::string HealthTelemetryControl::snapshot() {
     if (!last_failure_.empty()) {
         throw SyscallError("sample_unavailable",

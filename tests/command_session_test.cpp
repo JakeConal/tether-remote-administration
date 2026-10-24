@@ -17,7 +17,10 @@
 //  - health (add-health-telemetry task 4.3): the telemetry family is bound
 //    through install_commands with the dial-loop-owned HealthState, and an
 //    issued `health` returns the design D5 JSON snapshot, parsed here, over
-//    the established session.
+//    the established session;
+//  - session churn + cadence (tasks 5.1/5.2): the counters survive a redial
+//    on one process-wide state, and the cadence-gated pump fills the window
+//    while commands interleave, with honest age after a delayed tick.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
@@ -337,4 +340,95 @@ TEST_CASE("health over an established session is a parsable snapshot") {
     CHECK(refused.error_code == "invalid_args");
     CHECK(probe.read_calls == reads_before);
     CHECK(harness->agent->state() == tp::SessionState::Established);
+}
+
+TEST_CASE("health counters survive session churn across a redial") {
+    tsys::CommandDispatcher dispatcher;
+    FakeHealthProbe probe;
+    // The one process-wide sampler main() owns, anchored 5 s before the first
+    // dial; links (and their sessions) come and go around it.
+    tsys::HealthState health(1, 60, tsys::steady_clock_millis() - 5000);
+    const std::shared_ptr<tsys::ITelemetryControl> telemetry =
+        tsys::make_health_telemetry_control(health, probe);
+
+    {
+        const auto harness = Harness::connect();
+        tether::agent::install_commands(dispatcher, *harness->agent, telemetry);
+        health.note_established(tsys::steady_clock_millis()); // first dial: anchor
+        telemetry->sample();
+        telemetry->sample();
+
+        const tp::CommandView view = harness->issue(tp::Cmd{"health", {}});
+        REQUIRE(view.status == tp::CommandStatus::Completed);
+        const nlohmann::json first = nlohmann::json::parse(harness->text_of(view));
+        CHECK(first.at("reconnects").get<unsigned>() == 0);
+        CHECK(first.at("uptime_seconds").get<std::int64_t>() >= 5);
+    } // the link dies; main() redials
+
+    {
+        // Fresh session against the SAME state: the counters outlive the link.
+        const auto harness = Harness::connect();
+        tether::agent::install_commands(dispatcher, *harness->agent, telemetry);
+        health.note_established(tsys::steady_clock_millis()); // re-establishment
+        telemetry->sample(); // a dial-wait tick from the process-wide pump
+
+        const tp::CommandView view = harness->issue(tp::Cmd{"health", {}});
+        REQUIRE(view.status == tp::CommandStatus::Completed);
+        const nlohmann::json second = nlohmann::json::parse(harness->text_of(view));
+        CHECK(second.at("reconnects").get<unsigned>() == 1);
+        CHECK(second.at("uptime_seconds").get<std::int64_t>() >= 5);
+        CHECK(second.at("window").at("ticks").get<std::size_t>() == 3);
+    }
+}
+
+TEST_CASE("the cadence pump fills the window while commands interleave") {
+    tsys::CommandDispatcher dispatcher;
+    dispatcher.set_process_control(std::make_shared<FakeProcessControl>());
+    dispatcher.set_file_system(tsys::make_file_system());
+
+    FakeHealthProbe probe;
+    tsys::HealthMillis now = 10'000;
+    tsys::HealthState health(1, 60, 5'000);
+    const std::shared_ptr<tsys::ITelemetryControl> telemetry =
+        tsys::make_health_telemetry_control(health, probe, [&now] { return now; });
+
+    const auto harness = Harness::connect();
+    tether::agent::install_commands(dispatcher, *harness->agent, telemetry);
+
+    // Four 1 s cadence ticks, each interleaved with a real command round trip
+    // over the session: the pump never samples from inside the command path.
+    for (int tick = 0; tick < 4; ++tick) {
+        if (tick > 0) {
+            now += 1000;
+        }
+        telemetry->pump();
+        const tp::CommandView view = harness->issue(tp::Cmd{"health", {}});
+        REQUIRE(view.status == tp::CommandStatus::Completed);
+    }
+    CHECK(probe.read_calls == 4);
+
+    const nlohmann::json filled =
+        nlohmann::json::parse(harness->text_of(harness->issue(tp::Cmd{"health", {}})));
+    CHECK(filled.at("window").at("ticks").get<std::size_t>() == 4);
+    CHECK(filled.at("window").at("window_coverage").get<double>() ==
+          doctest::Approx(4.0 / 60.0));
+    CHECK(filled.at("sample_age_ms").get<std::int64_t>() == 0);
+    CHECK(filled.at("latest").at("cpu_percent").get<double>() == doctest::Approx(40.0));
+
+    // A busy dispatcher delays the next tick: the snapshot ages honestly
+    // instead of pretending the last reading is current.
+    now += 5000;
+    const nlohmann::json delayed =
+        nlohmann::json::parse(harness->text_of(harness->issue(tp::Cmd{"health", {}})));
+    CHECK(delayed.at("window").at("ticks").get<std::size_t>() == 4); // not refilled
+    CHECK(delayed.at("sample_age_ms").get<std::int64_t>() == 5000);
+    CHECK(delayed.at("latest").at("cpu_percent").get<double>() == doctest::Approx(40.0));
+
+    // The overdue pump samples exactly once, re-anchoring the cadence.
+    telemetry->pump();
+    CHECK(probe.read_calls == 5);
+    const nlohmann::json resumed =
+        nlohmann::json::parse(harness->text_of(harness->issue(tp::Cmd{"health", {}})));
+    CHECK(resumed.at("window").at("ticks").get<std::size_t>() == 5);
+    CHECK(resumed.at("sample_age_ms").get<std::int64_t>() == 0);
 }

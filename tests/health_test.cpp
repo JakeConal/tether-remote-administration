@@ -3,7 +3,8 @@
 // fill/drain, the baseline-only first tick (no fabricated CPU), aggregate
 // math over the configured span, honest staleness (sample age + coverage),
 // the uptime/reconnect counters, counter-reset robustness, and the
-// single-line snapshot JSON field set. Tasks 3.1/3.2 add one REAL-clock
+// single-line snapshot JSON field set. Task 5.2 adds the cadence-gated pump
+// (fake probe + fake clock, still no sleeps). Tasks 3.1/3.2 add one REAL-clock
 // smoke test for the OS host probe (plausible ranges; the 50 ms real gap
 // there is what makes consecutive cumulative CPU counters differ).
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
@@ -22,7 +23,9 @@ using tether::syscalls::HealthMillis;
 using tether::syscalls::HealthSnapshot;
 using tether::syscalls::HealthState;
 using tether::syscalls::HostReading;
+using tether::syscalls::IHealthHostProbe;
 using tether::syscalls::make_health_host_probe;
+using tether::syscalls::make_health_telemetry_control;
 
 HostReading reading(std::uint64_t busy, std::uint64_t total, std::uint64_t used,
                     std::uint64_t total_mem, std::uint32_t processes,
@@ -36,6 +39,18 @@ HostReading reading(std::uint64_t busy, std::uint64_t total, std::uint64_t used,
     r.threads = threads;
     return r;
 }
+
+// Task 5.2's fake seam: cumulative counters advance a fixed step per read, so
+// every post-baseline pump tick is a known 40% (and no real host is touched).
+struct FakeProbe final : IHealthHostProbe {
+    int reads = 0;
+
+    HostReading read() override {
+        ++reads;
+        const auto step = static_cast<std::uint64_t>(reads);
+        return reading(step * 400, step * 1000, 100 + step, 200, 3, 4);
+    }
+};
 
 // Parses the one-line snapshot; every key the design documents must exist.
 nlohmann::json parsed_json(const HealthState& state, HealthMillis now) {
@@ -244,6 +259,40 @@ TEST_CASE("baseline-only snapshot JSON carries null CPU instead of a zero") {
     CHECK_FALSE(window.contains("cpu_percent_avg"));
     CHECK_FALSE(window.contains("cpu_percent_max"));
     CHECK(window.contains("window_coverage"));
+}
+
+// ---- task 5.2: the cadence-gated pump ---------------------------------------
+
+TEST_CASE("pump samples once per configured interval and never bursts") {
+    HealthMillis now = 1'000;
+    FakeProbe probe;
+    HealthState state(1, 60, HealthMillis{0});
+    const auto control = make_health_telemetry_control(state, probe, [&now] { return now; });
+
+    control->pump(); // first pump is immediately due: the baseline tick
+    CHECK(probe.reads == 1);
+    CHECK(state.snapshot(now).ticks == 1);
+    CHECK_FALSE(state.snapshot(now).cpu_percent.has_value());
+
+    now += 500;
+    control->pump(); // inside the cadence window: nothing happens
+    CHECK(probe.reads == 1);
+
+    now += 500;
+    control->pump(); // due: the first CPU-bearing tick
+    CHECK(probe.reads == 2);
+    REQUIRE(state.snapshot(now).cpu_percent.has_value());
+    CHECK(*state.snapshot(now).cpu_percent == doctest::Approx(40.0).epsilon(kEpsilon));
+
+    now += 5'000;
+    control->pump(); // a delayed tick samples exactly once, not a catch-up burst
+    CHECK(probe.reads == 3);
+    CHECK(state.snapshot(now).ticks == 3);
+    CHECK(state.snapshot(now).sample_age_ms == 0);
+
+    now += 500;
+    control->pump(); // the cadence re-anchored at the late tick
+    CHECK(probe.reads == 3);
 }
 
 // Tasks 3.1/3.2: the one test that touches the real OS - the Windows probe

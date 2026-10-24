@@ -122,8 +122,14 @@ int main(int argc, char* argv[]) {
     for (;;) {
         std::unique_ptr<transport::TcpAgentLink> link;
         try {
-            link = transport::establish_with_retries(endpoint, identity, config.token,
-                                                     protocol::SessionConfig{}, policy);
+            // Task 5.2: keep the sampler ticking through a console outage.
+            // The retry wait invokes the cadence-gated pump every 10 ms, so a
+            // snapshot after re-registration carries disconnected-period
+            // samples instead of an empty window (health-telemetry spec:
+            // "Sampling continues without any console session").
+            link = transport::establish_with_retries(
+                endpoint, identity, config.token, protocol::SessionConfig{}, policy,
+                /*max_attempts=*/0, [&telemetry] { telemetry->pump(); });
         } catch (const transport::TransportError& error) {
             // Unreachable with an unbounded budget, but failures must surface.
             log.error("dial-out gave up unexpectedly", {{"error", error.what()}});
@@ -140,13 +146,24 @@ int main(int argc, char* argv[]) {
             link->begin_handshake(now);
             while (!link->down() && !link->established()) {
                 now = steady_now_ms();
+                telemetry->pump();
                 link->pump(now);
                 if (!link->down() && !link->established()) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
             }
+            if (link->established()) {
+                // Task 5.1: the first establishment anchors uptime; every
+                // later one is a true re-registration after a drop.
+                health.note_established(now);
+            }
             while (link->established()) {
                 now = steady_now_ms();
+                // Task 5.2: the interval-driven tick rides the same inline
+                // pump loop as the session (D3: no thread, no queue) and runs
+                // before this cycle's commands so a `health` sees the freshest
+                // due sample rather than waiting a whole interval behind it.
+                telemetry->pump();
                 link->pump(now);
                 if (!link->established()) {
                     break;

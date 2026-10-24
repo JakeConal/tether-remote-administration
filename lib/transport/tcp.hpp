@@ -185,11 +185,15 @@ private:
 // `max_attempts == 0` means retry forever (the spec: the agent stays up and
 // connects once the console becomes reachable). A nonzero budget exists for
 // deterministic tests only. Real sleeps are bounded by the policy cap.
+// `on_retry_wait` is invoked at most every 10 ms inside each backoff wait so
+// the caller can keep inline work alive while the console is unreachable
+// (the agent's cadence-gated health sampler); an empty hook is a plain sleep.
 std::unique_ptr<TcpAgentLink> establish_with_retries(const AgentEndpoint& endpoint,
                                                      const protocol::AgentIdentity& identity,
                                                      const std::string& token,
                                                      const protocol::SessionConfig& session,
                                                      DialPolicy policy,
-                                                     std::size_t max_attempts = 0);
+                                                     std::size_t max_attempts = 0,
+                                                     std::function<void()> on_retry_wait = {});
 
 } // namespace tether::transport
