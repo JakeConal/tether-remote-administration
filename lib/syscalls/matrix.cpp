@@ -1,15 +1,16 @@
 // lib/syscalls/matrix.cpp - the matrix data and the dispatch layer's
 // implementation (task 6.1), plus the family glue for the families
 // implemented in this build: process (task 6.2), file (task 6.3), power
-// (task 6.4), capture (task 6.5), camera (task 6.6), input (task 6.7) and
-// app (task 6.8). The glue owns only argument-shape validation and result
-// formatting; every system effect goes through the family interface as
-// typed data.
+// (task 6.4), capture (task 6.5), camera (task 6.6), input (task 6.7), app
+// (task 6.8) and telemetry (add-health-telemetry task 4.2). The glue owns
+// only argument-shape validation and result formatting; every system effect
+// goes through the family interface as typed data.
 #include "matrix.hpp"
 
 #include "app.hpp"
 #include "camera.hpp"
 #include "capture.hpp"
+#include "health.hpp"
 #include "input.hpp"
 #include "power.hpp"
 
@@ -23,7 +24,7 @@ namespace {
 // ---- the closed set ----------------------------------------------------------
 
 // clang-format off: one row per line keeps the verb -> family/support shape
-// auditable against the remote-commands delta's command list (19 rows).
+// auditable against the remote-commands delta's command list (20 rows).
 const std::vector<CommandSpec> kCommandSet = {
     // process family (task 6.2): list/start/stop.
     {"list",            Family::Process, false, true, true},
@@ -58,6 +59,9 @@ const std::vector<CommandSpec> kCommandSet = {
     {"list_app",        Family::App,     false, true, true},
     {"start_app",       Family::App,     false, true, true},
     {"stop_app",        Family::App,     false, true, true},
+    // telemetry family (add-health-telemetry): the one snapshot verb. It only
+    // reads the sampler window - non-destructive, no parameters, both OSes.
+    {"health",          Family::Telemetry, false, true, true},
 };
 
 Outcome refuse(const std::string& code, const std::string& message) {
@@ -455,6 +459,25 @@ Outcome app_stop(IProcessControl& processes, const std::vector<std::string>& arg
     return process_stop(processes, argv);
 }
 
+// ---- family glue: telemetry (add-health-telemetry task 4.2) -------------------
+
+// `health` takes no parameters: any argument refuses BEFORE the capability is
+// read (spec: "The health command takes no parameters"). The snapshot is the
+// control's; a sampling failure arrives as SyscallError("sample_unavailable")
+// and the dispatcher classifier below turns it into the wire-visible refusal
+// (spec: "Sampling failure fails loudly, never with zeros").
+Outcome telemetry_health(ITelemetryControl& control, const std::vector<std::string>& argv) {
+    if (!argv.empty()) {
+        throw SyscallError("invalid_args",
+                           "health takes no arguments, got " + std::to_string(argv.size()));
+    }
+    Outcome outcome;
+    outcome.ok = true;
+    outcome.code = "ok";
+    outcome.lines.push_back(control.snapshot());
+    return outcome;
+}
+
 } // namespace
 
 // ---- matrix accessors ---------------------------------------------------------
@@ -495,6 +518,7 @@ const char* family_name(Family family) {
         case Family::Camera: return "camera";
         case Family::App: return "app";
         case Family::Input: return "input";
+        case Family::Telemetry: return "telemetry";
     }
     return "unknown";
 }
@@ -541,6 +565,10 @@ void CommandDispatcher::set_app_launcher(std::shared_ptr<IAppLauncher> impl) {
     app_ = std::move(impl);
 }
 
+void CommandDispatcher::set_telemetry_control(std::shared_ptr<ITelemetryControl> impl) {
+    telemetry_ = std::move(impl);
+}
+
 bool CommandDispatcher::family_available(Family family) const {
     switch (family) {
         case Family::Process: return process_ != nullptr;
@@ -550,7 +578,8 @@ bool CommandDispatcher::family_available(Family family) const {
         case Family::Camera: return camera_ != nullptr;
         case Family::Input: return input_ != nullptr;
         case Family::App: return app_ != nullptr;
-        default: return false; // never reached with all seven enumerated
+        case Family::Telemetry: return telemetry_ != nullptr;
+        default: return false; // never reached with all eight enumerated
     }
 }
 
@@ -664,6 +693,9 @@ Outcome CommandDispatcher::dispatch(const std::string& verb,
                               "'stop_app' needs the shared process control, which is not wired");
             }
             return app_stop(*process_, argv);
+        case Family::Telemetry:
+            // Unreachable with a null family: step 3 refused first.
+            return telemetry_health(*telemetry_, argv);
         default:
             break;
     }

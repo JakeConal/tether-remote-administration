@@ -1,11 +1,13 @@
 // lib/syscalls/health.cpp - the health sampler engine (add-health-telemetry,
-// tasks 2.1/2.2). Pure interval/aggregate math plus the numeric-only
-// snapshot JSON builder; see the header for the contracts.
+// tasks 2.1/2.2) plus the dispatcher-facing telemetry control (task 4.2).
+// Pure interval/aggregate math plus the numeric-only snapshot JSON builder;
+// see the header for the contracts.
 #include "health.hpp"
 
 #include "errors.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <sstream>
 #include <utility>
 
@@ -179,6 +181,60 @@ std::string HealthSnapshot::json() const {
     out += std::to_string(interval_s);
     out += "}";
     return out;
+}
+
+} // namespace tether::syscalls
+
+// ---- The dispatcher-facing telemetry control (task 4.2) ---------------------
+//
+// Separated from the engine exactly like the probes: HealthState stays pure,
+// the control owns the failure bookkeeping the `health` call needs.
+
+namespace tether::syscalls {
+
+HealthMillis steady_clock_millis() {
+    return static_cast<HealthMillis>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+}
+
+HealthTelemetryControl::HealthTelemetryControl(HealthState& state,
+                                               IHealthHostProbe& probe,
+                                               std::function<HealthMillis()> clock)
+    : state_(state), probe_(probe), clock_(std::move(clock)) {}
+
+void HealthTelemetryControl::sample() {
+    try {
+        state_.tick(clock_(), probe_.read());
+        last_failure_.clear();
+    } catch (const SyscallError& error) {
+        // Probe failures are structured; remember the message verbatim so the
+        // refusal names the real cause (D5: fail loudly, never zeros).
+        last_failure_ = error.what();
+    } catch (const std::exception& error) {
+        last_failure_ = error.what();
+    }
+}
+
+std::string HealthTelemetryControl::snapshot() {
+    if (!last_failure_.empty()) {
+        throw SyscallError("sample_unavailable",
+                           "host sampling failed: " + last_failure_);
+    }
+    const HealthSnapshot current = state_.snapshot(clock_());
+    if (!current.has_latest) {
+        // No tick yet (or a tick that never succeeded): an empty window must
+        // never masquerade as a healthy zeroed snapshot.
+        throw SyscallError("sample_unavailable",
+                           "no host sample has been taken yet");
+    }
+    return current.json();
+}
+
+std::shared_ptr<ITelemetryControl> make_health_telemetry_control(
+    HealthState& state, IHealthHostProbe& probe, std::function<HealthMillis()> clock) {
+    return std::make_shared<HealthTelemetryControl>(state, probe, std::move(clock));
 }
 
 } // namespace tether::syscalls

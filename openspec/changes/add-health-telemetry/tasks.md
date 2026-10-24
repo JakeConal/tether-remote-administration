@@ -17,8 +17,8 @@
 
 ## 4. The `health` command surface
 
-- [ ] 4.1 Add `Family::Telemetry` and `family_name`, and one `kCommandSet` row (`health`, non-destructive, both OSes); extend `tests/matrix_test.cpp`: `health` is in the closed set, the five-gate ordering still holds with the new row, and unknown verbs keep refusing with `unknown_command`
-- [ ] 4.2 Implement the telemetry family call: parameter-arity refusal (any args → structured refusal, no effect) and `sample_unavailable` mapping for a failing probe; pin both in `tests/matrix_test.cpp`
+- [x] 4.1 Add `Family::Telemetry` and `family_name`, and one `kCommandSet` row (`health`, non-destructive, both OSes); extend `tests/matrix_test.cpp`: `health` is in the closed set, the five-gate ordering still holds with the new row, and unknown verbs keep refusing with `unknown_command`
+- [x] 4.2 Implement the telemetry family call: parameter-arity refusal (any args → structured refusal, no effect) and `sample_unavailable` mapping for a failing probe; pin both in `tests/matrix_test.cpp`
 - [ ] 4.3 Wire `install_commands` so the agent installs the family with `HealthState` + dial-loop counters injected; verify via a loopback command flow (`tests/command_session_test.cpp` pattern) that an issued `health` returns a parsable snapshot over an established session
 
 ## 5. Agent loop wiring

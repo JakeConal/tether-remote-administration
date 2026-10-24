@@ -1,5 +1,6 @@
 // lib/syscalls/health.hpp - the health sampler engine (add-health-telemetry,
-// tasks 2.1/2.2, design D2/D3/D5/D9).
+// tasks 2.1/2.2, design D2/D3/D5/D9) plus the dispatcher-facing telemetry
+// control (task 4.2).
 //
 // HealthState is the pure, testable core: it owns the rolling window, the
 // agent-self counters (uptime / reconnects), the staleness bookkeeping, and
@@ -18,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -148,5 +150,57 @@ private:
 
     std::deque<Sample> window_;
 };
+
+// ---- the dispatcher-facing telemetry surface (task 4.2) --------------------
+//
+// The agent's pump loop calls sample() at the configured cadence (task 5.2);
+// the `health` family call renders snapshot() on demand. Keeping sampling and
+// rendering apart preserves D3's inline tick: the command path never
+// fabricates freshness, and the window's tick cadence stays exactly the
+// configured interval (an extra sample per poll would silently halve the
+// window's wall span).
+//
+// A host-sampling failure is sticky until the next SUCCESSFUL sample, so a
+// `health` that lands after a failed probe attempt refuses loudly instead of
+// serving stale values as current (health-telemetry spec: "Sampling failure
+// fails loudly, never with zeros").
+
+// Monotonic milliseconds on the agent's steady clock (the HealthMillis
+// domain every caller uses: the pump loop and the control's own reads).
+HealthMillis steady_clock_millis();
+
+class ITelemetryControl {
+public:
+    virtual ~ITelemetryControl() = default;
+
+    // One host sample into the rolling window. The caller owns the cadence.
+    // Never throws: a failed attempt is remembered for snapshot() to refuse.
+    virtual void sample() = 0;
+
+    // The design D5 snapshot JSON (single line). Throws
+    // SyscallError("sample_unavailable", ...) when the latest sampling
+    // attempt failed or nothing has been sampled yet - the family layer maps
+    // that to the wire-visible structured refusal.
+    virtual std::string snapshot() = 0;
+};
+
+// The production implementation over the shared sampler and OS probe.
+class HealthTelemetryControl final : public ITelemetryControl {
+public:
+    HealthTelemetryControl(HealthState& state, IHealthHostProbe& probe,
+                           std::function<HealthMillis()> clock);
+    void sample() override;
+    std::string snapshot() override;
+
+private:
+    HealthState& state_;
+    IHealthHostProbe& probe_;
+    std::function<HealthMillis()> clock_;
+    std::string last_failure_; // empty == the latest attempt succeeded (or none yet)
+};
+
+std::shared_ptr<ITelemetryControl> make_health_telemetry_control(
+    HealthState& state, IHealthHostProbe& probe,
+    std::function<HealthMillis()> clock = steady_clock_millis);
 
 } // namespace tether::syscalls

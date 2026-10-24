@@ -2,10 +2,12 @@
 // (design D6, task 6.1). This is the agent's entire command surface in data
 // form:
 //
-//  - `command_set()` holds exactly the v2 command set carried over from v1
-//    (19 verbs across the 7 families). Anything outside it is rejected
-//    BEFORE any capability call: the closed set (remote-commands delta:
-//    "unknown command is refused harmlessly").
+//  - `command_set()` holds exactly the accepted command set: the v2
+//    vocabulary carried over from v1 (19 verbs across 7 families) plus the
+//    telemetry `health` snapshot verb (add-health-telemetry, design D1/D5) -
+//    20 verbs across 8 families. Anything outside it is rejected BEFORE any
+//    capability call: the closed set (remote-commands delta: "unknown command
+//    is refused harmlessly").
 //  - Each row pins the family interface the verb maps to and its per-platform
 //    support. A verb whose row says the platform lacks it - or whose family
 //    implementation is not wired into this build yet - resolves to the
@@ -22,11 +24,12 @@
 // family interface as data (see process.hpp / file.hpp).
 //
 // The dispatcher is the wiring point for every family: power / capture /
-// camera (6.4-6.6), input (6.7) and app (6.8) land behind
-// `set_power_control` / `set_screen_capture` / `set_camera_capture` /
-// `set_input_control` / `set_app_launcher`. A family slot left null keeps
-// its verbs dispatching to the structured unsupported result below - the
-// definitive, non-wedging resolution.
+// camera (6.4-6.6), input (6.7), app (6.8) and telemetry (add-health-telemetry,
+// 4.2) land behind `set_power_control` / `set_screen_capture` /
+// `set_camera_capture` / `set_input_control` / `set_app_launcher` /
+// `set_telemetry_control`. A family slot left null keeps its verbs
+// dispatching to the structured unsupported result below - the definitive,
+// non-wedging resolution.
 #pragma once
 
 #include "errors.hpp"
@@ -49,7 +52,7 @@ const char* platform_name(Platform platform); // "windows" | "linux" (refusal te
 // these two). Injections exist for tests of the matrix mechanism itself.
 Platform current_platform();
 
-enum class Family { Process, File, Power, Capture, Camera, App, Input };
+enum class Family { Process, File, Power, Capture, Camera, App, Input, Telemetry };
 
 const char* family_name(Family family); // "process" | ... (refusal text)
 
@@ -60,6 +63,8 @@ const char* family_name(Family family); // "process" | ... (refusal text)
 //                        (names the platform and the family)
 //   missing_confirmation destructive verb without the confirmation token
 //   invalid_args         verb present but the argument shape is malformed
+//   sample_unavailable   the telemetry `health` verb could not obtain a host
+//                        sample (sampling failed or nothing sampled yet)
 //   not_found / access_denied / directory_not_empty / already_exists /
 //     cross_device / execute_failed  (see errors.hpp for the family codes)
 //   already_running  a background-job start arrived for a running job
@@ -94,11 +99,12 @@ struct CommandSpec {
     bool on_linux;
 };
 
-// The closed command set, one row per verb (19 rows, 7 families). The set is
-// the v1 vocabulary carried over: process list/start/stop as "list"/"start"/
+// The closed command set, one row per verb (20 rows, 8 families). The set is
+// the v1 vocabulary carried over - process list/start/stop as "list"/"start"/
 // "stop", the file family as "ls"/"delete"/"move"/"copy", the camera pair as
 // "start_webcam"/"stop_webcam", and so on (the operator-console delta's CLI
-// gate pins "delete"/"shutdown"/"restart" against the same words).
+// gate pins "delete"/"shutdown"/"restart" against the same words) - plus the
+// add-health-telemetry `health` verb of the telemetry family.
 const std::vector<CommandSpec>& command_set();
 
 // Exact-match lookup against the closed set: nullptr means the verb is
@@ -118,6 +124,7 @@ class IScreenCapture;
 class ICameraCapture;
 class IInputControl;  // input.hpp (task 6.7): keylogger jobs + keyboard lock
 class IAppLauncher;   // app.hpp (task 6.8): app list / start / stop
+class ITelemetryControl; // health.hpp (add-health-telemetry): health snapshot
 
 class CommandDispatcher {
 public:
@@ -141,6 +148,9 @@ public:
     // 6.7 input, 6.8 app.
     void set_input_control(std::shared_ptr<IInputControl> impl);
     void set_app_launcher(std::shared_ptr<IAppLauncher> impl);
+    // add-health-telemetry: the telemetry family (`health`). The sampler
+    // behind it is driven by the agent's pump loop, not by the dispatcher.
+    void set_telemetry_control(std::shared_ptr<ITelemetryControl> impl);
 
     // THE dispatch entry: one definitive Outcome for ANY (verb, args), in
     // this order of checks, each refusing without touching any capability:
@@ -170,6 +180,7 @@ private:
     std::shared_ptr<ICameraCapture> camera_;
     std::shared_ptr<IInputControl> input_;
     std::shared_ptr<IAppLauncher> app_;
+    std::shared_ptr<ITelemetryControl> telemetry_;
 };
 
 } // namespace tether::syscalls

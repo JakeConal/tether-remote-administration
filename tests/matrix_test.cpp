@@ -15,9 +15,15 @@
 //  - certifications: destructive verbs refuse at this layer without the
 //    confirmation token, nothing executed; parameters flow to the family as
 //    literal data
+//  - telemetry (add-health-telemetry tasks 4.1/4.2): `health` is the 20th
+//    verb of a new family; the matrix/family gates still precede argument
+//    validation, any parameter refuses with no sample taken, and a failing
+//    probe maps to sample_unavailable while the window stays empty (never
+//    zeros)
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+#include "health.hpp"
 #include "matrix.hpp"
 
 #include <memory>
@@ -85,6 +91,44 @@ struct Fakes {
     int total_family_calls() const {
         return process->list_calls + process->start_calls + process->stop_calls +
                file->list_calls + file->remove_calls + file->move_calls + file->copy_calls;
+    }
+};
+
+// The telemetry family's recording probe: cumulative counters advance on
+// every successful read (the engine diffs them), and `fail` drives the
+// fail-loudly path.
+struct FakeHealthProbe final : tsys::IHealthHostProbe {
+    int read_calls = 0;
+    bool fail = false;
+
+    tsys::HostReading read() override {
+        ++read_calls;
+        if (fail) {
+            throw tsys::SyscallError("sample_unavailable", "host interfaces unavailable");
+        }
+        const std::uint64_t step = static_cast<std::uint64_t>(read_calls);
+        tsys::HostReading reading;
+        reading.cpu_busy = step * 400;    // 40% of the total delta
+        reading.cpu_total = step * 1000;
+        reading.memory_used = 512 + step;
+        reading.memory_total = 4096;
+        reading.processes = 40 + static_cast<std::uint32_t>(read_calls);
+        reading.threads = 100 + static_cast<std::uint32_t>(read_calls);
+        return reading;
+    }
+};
+
+// The REAL HealthState + HealthTelemetryControl over the fake probe, with a
+// fixed clock: the matrix tests exercise the production control path, not a
+// hand-written telemetry stub.
+struct TelemetryFixture {
+    FakeHealthProbe probe;
+    tsys::HealthState state{1, 60, tsys::HealthMillis{0}};
+    std::shared_ptr<tsys::ITelemetryControl> control;
+
+    TelemetryFixture() {
+        control = tsys::make_health_telemetry_control(
+            state, probe, [] { return tsys::HealthMillis{5000}; });
     }
 };
 
@@ -158,7 +202,7 @@ TEST_CASE("every defined command resolves to a definitive outcome") {
     fakes.wire_into(dispatcher);
 
     const std::vector<tsys::CommandSpec>& set = tsys::command_set();
-    REQUIRE(set.size() == 19); // the full v2 set, no more, no less
+    REQUIRE(set.size() == 20); // the accepted set: v2's 19 + the telemetry verb
     for (std::size_t i = 0; i < set.size(); ++i) {
         for (std::size_t j = i + 1; j < set.size(); ++j) {
             REQUIRE(set[j].verb != set[i].verb); // uniqueness keeps the set closed
@@ -168,7 +212,7 @@ TEST_CASE("every defined command resolves to a definitive outcome") {
     for (const tsys::CommandSpec& spec : set) {
         CAPTURE(spec.verb);
         const tsys::Outcome outcome = dispatcher.dispatch(spec.verb, args_for(spec.verb));
-        // "never an unclassified failure": every one of the 19 verbs ends in
+        // "never an unclassified failure": every one of the 20 verbs ends in
         // a recognized class, success included.
         const bool definitive = outcome.ok || !outcome.code.empty();
         REQUIRE(definitive);
@@ -177,8 +221,8 @@ TEST_CASE("every defined command resolves to a definitive outcome") {
             CHECK(outcome.ok);
             CHECK(outcome.code == "ok");
         } else {
-            // Families landing in 6.4-6.8 hold the structured unsupported
-            // resolution in the meantime (naming platform + family).
+            // Families not wired into this test's dispatcher hold the
+            // structured unsupported resolution (naming platform + family).
             CHECK_FALSE(outcome.ok);
             CHECK(outcome.code == "unsupported_platform");
             CHECK(outcome.message.find(spec.verb) != std::string::npos);
@@ -201,7 +245,7 @@ TEST_CASE("out-of-matrix verbs return the structured refusal naming platform and
 
     // The matrix mechanism test: one row pinned to a platform that does not
     // resolve it, exactly the shape a platform gap takes in real data (the
-    // production rows keep all 19 verbs on both OSes; Wayland/partial-OS
+    // production rows keep all 20 verbs on both OSes; Wayland/partial-OS
     // gaps land as data edits in the family tasks).
     std::vector<tsys::CommandSpec> crafted = tsys::command_set();
     for (tsys::CommandSpec& spec : crafted) {
@@ -297,4 +341,126 @@ TEST_CASE("parameters reach the family as literal typed data") {
     // sees (and looks up - see file_family_test for the real-disk variant).
     dispatcher.dispatch("delete", {tsys::kConfirmMarker, "a;b|c&d>e"});
     CHECK(fakes.file->last_removed == "a;b|c&d>e");
+}
+
+// ---- add-health-telemetry: the telemetry family (tasks 4.1/4.2) -------------
+
+TEST_CASE("health is the 20th verb, in the telemetry family, on both OSes") {
+    const tsys::CommandSpec* health = tsys::find_command("health");
+    REQUIRE(health != nullptr);
+    CHECK(health->family == tsys::Family::Telemetry);
+    CHECK_FALSE(health->destructive);
+    CHECK(tsys::supported_on(*health, tsys::Platform::Windows));
+    CHECK(tsys::supported_on(*health, tsys::Platform::Linux));
+    CHECK(std::string(tsys::family_name(tsys::Family::Telemetry)) == "telemetry");
+
+    // Exact-match closed set: near misses stay outside it.
+    CHECK(tsys::find_command("healthz") == nullptr);
+    CHECK(tsys::find_command("Health") == nullptr);
+    CHECK(tsys::command_set().size() == 20);
+}
+
+TEST_CASE("the matrix and family gates hold for the health row") {
+    // Gate 2 (row/platform) precedes gate 5 (argument checks): pin health off
+    // Linux and even a parameter-carrying call refuses structurally with no
+    // sampling read at all.
+    std::vector<tsys::CommandSpec> crafted = tsys::command_set();
+    for (tsys::CommandSpec& spec : crafted) {
+        if (std::string(spec.verb) == "health") {
+            spec.on_linux = false;
+        }
+    }
+    TelemetryFixture fixture;
+    tsys::CommandDispatcher pinned(tsys::Platform::Linux, crafted);
+    pinned.set_telemetry_control(fixture.control);
+    const tsys::Outcome outside = pinned.dispatch("health", {"anything"});
+    CHECK_FALSE(outside.ok);
+    CHECK(outside.code == "unsupported_platform");
+    CHECK(outside.message.find("linux") != std::string::npos);
+    CHECK(outside.message.find("telemetry") != std::string::npos);
+    CHECK(fixture.probe.read_calls == 0);
+
+    // Gate 3 (family availability) also precedes gate 5: a supported but
+    // unwired health refuses as unsupported, not as invalid_args.
+    tsys::CommandDispatcher unwired;
+    const tsys::Outcome gap = unwired.dispatch("health", {"anything"});
+    CHECK_FALSE(gap.ok);
+    CHECK(gap.code == "unsupported_platform");
+    CHECK(gap.message.find("health") != std::string::npos);
+    CHECK(gap.message.find("telemetry") != std::string::npos);
+}
+
+TEST_CASE("health rejects every parameter without sampling") {
+    TelemetryFixture fixture;
+    tsys::CommandDispatcher dispatcher;
+    dispatcher.set_telemetry_control(fixture.control);
+
+    for (const std::vector<std::string>& args :
+         {std::vector<std::string>{""}, std::vector<std::string>{"1"},
+          std::vector<std::string>{"confirm"}}) {
+        CAPTURE(args.size());
+        const tsys::Outcome outcome = dispatcher.dispatch("health", args);
+        CHECK_FALSE(outcome.ok);
+        CHECK(outcome.code == "invalid_args");
+        CHECK(outcome.message.find("health") != std::string::npos);
+    }
+    // The arity gate fired before the capability: the probe never ran and the
+    // window is still empty.
+    CHECK(fixture.probe.read_calls == 0);
+    CHECK_FALSE(fixture.state.snapshot(tsys::HealthMillis{5000}).has_latest);
+}
+
+TEST_CASE("health serves the sampler's one-line snapshot") {
+    TelemetryFixture fixture;
+    fixture.control->sample(); // baseline-only first tick (no fabricated CPU)
+    fixture.control->sample();
+    tsys::CommandDispatcher dispatcher;
+    dispatcher.set_telemetry_control(fixture.control);
+
+    const tsys::Outcome outcome = dispatcher.dispatch("health", {});
+    CHECK(outcome.ok);
+    CHECK(outcome.code == "ok");
+    REQUIRE(outcome.lines.size() == 1);
+    const std::string& snapshot = outcome.lines.front();
+    CHECK(snapshot.front() == '{');
+    CHECK(snapshot.back() == '}');
+    CHECK(snapshot.find("\"uptime_seconds\"") != std::string::npos);
+    CHECK(snapshot.find("\"latest\"") != std::string::npos);
+    CHECK(snapshot.find("\"window\"") != std::string::npos);
+    CHECK(snapshot.find("\"sample_age_ms\"") != std::string::npos);
+    CHECK(snapshot.find("\"interval_s\"") != std::string::npos);
+    CHECK(snapshot.find('\n') == std::string::npos); // the D5 single line
+}
+
+TEST_CASE("a failing probe maps to sample_unavailable, never zeros") {
+    TelemetryFixture fixture;
+    fixture.probe.fail = true;
+    fixture.control->sample(); // the pump cadence attempt fails
+    tsys::CommandDispatcher dispatcher;
+    dispatcher.set_telemetry_control(fixture.control);
+
+    const tsys::Outcome outcome = dispatcher.dispatch("health", {});
+    CHECK_FALSE(outcome.ok);
+    CHECK(outcome.code == "sample_unavailable");
+    CHECK(outcome.message.find("host interfaces unavailable") != std::string::npos);
+    CHECK(fixture.probe.read_calls == 1);
+    // Nothing was fabricated into the window.
+    CHECK_FALSE(fixture.state.snapshot(tsys::HealthMillis{5000}).has_latest);
+
+    // Honesty is per attempt: the next good sample clears the refusal.
+    fixture.probe.fail = false;
+    fixture.control->sample();
+    const tsys::Outcome recovered = dispatcher.dispatch("health", {});
+    CHECK(recovered.ok);
+}
+
+TEST_CASE("health before the first sample refuses instead of an empty snapshot") {
+    TelemetryFixture fixture;
+    tsys::CommandDispatcher dispatcher;
+    dispatcher.set_telemetry_control(fixture.control);
+
+    const tsys::Outcome outcome = dispatcher.dispatch("health", {});
+    CHECK_FALSE(outcome.ok);
+    CHECK(outcome.code == "sample_unavailable");
+    CHECK(fixture.probe.read_calls == 0); // the command never samples on demand
 }
