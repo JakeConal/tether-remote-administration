@@ -85,7 +85,9 @@ TEST_CASE("later ticks diff the counters into a percentage") {
 
 TEST_CASE("aggregates cover the whole recorded span: cpu avg/max, memory max") {
     HealthState state(1, 60, HealthMillis{0});
-    // busy deltas 400/1000, 450/1000, ... -> cpu 40, 45, 50, 55, 60
+    // Cumulative busy deltas 400 (baseline, no CPU), then 450/500/550/600 per
+    // 1000 total -> cpu 45, 50, 55, 60 (the first tick never carries a value;
+    // baseline-only is the design D2 contract, pinned by the tests above).
     std::uint64_t busy = 0;
     std::uint64_t used = 100;
     for (HealthMillis t{1000}; t <= HealthMillis{5000}; t += 1000) {
@@ -96,7 +98,7 @@ TEST_CASE("aggregates cover the whole recorded span: cpu avg/max, memory max") {
 
     const tether::syscalls::HealthSnapshot snap = state.snapshot(HealthMillis{5000});
     REQUIRE(snap.cpu_percent_avg.has_value());
-    CHECK(*snap.cpu_percent_avg == doctest::Approx(50.0).epsilon(kEpsilon));
+    CHECK(*snap.cpu_percent_avg == doctest::Approx(52.5).epsilon(kEpsilon));
     REQUIRE(snap.cpu_percent_max.has_value());
     CHECK(*snap.cpu_percent_max == doctest::Approx(60.0).epsilon(kEpsilon));
     REQUIRE(snap.memory_used_max.has_value());
