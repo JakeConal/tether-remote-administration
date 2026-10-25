@@ -12,8 +12,8 @@ CI uses it.
 | Framework | [doctest](https://github.com/doctest/doctest), single-header mode |
 | Driver | CTest — `add_test()` per suite |
 | Suites | 30 doctest translation units (29 standalone + the partitioned families-e2e TU) |
-| Test cases | **240** `TEST_CASE` registrations at source level |
-| CTest entries | **37** (26 suites + 11 per-case e2e partitions) |
+| Test cases | **279** `TEST_CASE` registrations at source level |
+| CTest entries | **40** (29 suites + 11 per-case e2e partitions) |
 | Helper executables | 2 (`tether-argv-probe`, `tether-capture-bench`) |
 | Sleeps | **none in the protocol layer**, and only one bounded sleep site in the transport layer (the dial-out backoff, exercised by the loopback suite with a 1–2 ms policy). Everything else is injected time. The test binaries themselves sleep only inside bounded poll loops (see §4). |
 
@@ -106,12 +106,12 @@ ctest --test-dir build -R envelope-test -V --output-on-failure -C Release
 | `handshake-test` | `handshake_test.cpp` | 10 | protocol | The HMAC against RFC 4231, nonce entropy, and every refusal path including replay. |
 | `session-test` | `session_test.cpp` | 20 | protocol | The handshake end to end, seq correlation, timeouts, cancellation, keepalives, supersession. |
 | `base64-test` | `base64_test.cpp` | 6 | common | The RFC 4648 vectors, both alphabets, whitespace tolerance, and the rejection cases. |
-| `tcp-loopback-test` | `tcp_loopback_test.cpp` | 8 | transport, protocol | The TCP transport on **real loopback sockets**, including a spawned production `tether-agent` child that is hard-killed. |
+| `tcp-loopback-test` | `tcp_loopback_test.cpp` | 9 | transport, protocol | The TCP transport on **real loopback sockets**, including a spawned production `tether-agent` child that is hard-killed. |
 | `gmail-test` | `gmail_test.cpp` | 15 | transport, protocol, common | The Gmail adapter with the network **fully mocked** — no real API call is ever made. |
 | `transport-equiv-test` | `transport_equiv_test.cpp` | 5 | transport, protocol, common | Both transports behind one interface; the same command yields equal semantics over TCP and over mail. |
 | `registry-test` | `registry_test.cpp` | 3 | protocol | The live / stale / down registry states over real handshakes on in-memory pipes. |
-| `cli-verb-test` | `cli_verb_test.cpp` | 9 | cli, protocol | Verb parsing, exit codes, and the dispatch contract against a fake console. |
-| `cli-stream-test` | `cli_stream_test.cpp` | 5 | cli, protocol | stdout carries results byte-exactly; stderr stays clean; an incomplete delivery is a failure. |
+| `cli-verb-test` | `cli_verb_test.cpp` | 11 | cli, protocol | Verb parsing, exit codes, and the dispatch contract against a fake console. |
+| `cli-stream-test` | `cli_stream_test.cpp` | 7 | cli, protocol | stdout carries results byte-exactly; stderr stays clean; an incomplete delivery is a failure. |
 | `cli-confirm-test` | `cli_confirm_test.cpp` | 6 | cli, protocol | The confirmation gate refuses with **zero dispatch calls** — the "nothing was sent" witness. |
 | `cli-integration-test` | `cli_integration_test.cpp` | 5 | cli, transport, protocol, common | The CLI driving the **real session stack** over live loopback sockets, including the dial-in budget and the monitor's restart/refusal paths. |
 | `cli-stats-test` | `cli_stats_test.cpp` | 3 | cli | The console-local latency sampler, counting byte decorators, and interval throughput math. |
@@ -122,7 +122,7 @@ ctest --test-dir build -R envelope-test -V --output-on-failure -C Release
 | `power-family-test` | `power_family_test.cpp` | 5 | syscalls | The refusal path against the real per-OS family; the confirmed path against an injected backend only. |
 | `capture-family-test` | `capture_family_test.cpp` | 6 | syscalls | A produced screenshot is a **decodable image file** (`cv::imdecode` back into real pixels). |
 | `camera-family-test` | `camera_family_test.cpp` | 6 | command-handler, syscalls | The camera family over OpenCV with the shared job registry, using an injected fake source. |
-| `command-session-test` | `command_session_test.cpp` | 5 | command-handler, syscalls, common | The dispatcher behind a real session pair over in-memory pipes. |
+| `command-session-test` | `command_session_test.cpp` | 8 | command-handler, syscalls, common | The dispatcher behind a real session pair over in-memory pipes. |
 | `input-family-test` | `input_family_test.cpp` | 13 | syscalls | The keylogger job lifecycle, configurable storage, the keyboard-lock state, and the Wayland refusal. |
 | `app-family-test` | `app_family_test.cpp` | 3 | syscalls | `.lnk` / `.desktop` listing, argv-resolved launches, and stop reuse. |
 | `audit-test` | `audit_test.cpp` | 24 | cli, common | The JSONL store, the query API, the CLI record hooks, monitor/health audit coverage, persistence, and strict re-open. |

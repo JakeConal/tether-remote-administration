@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "b540bfef-a73f-46f4-9c3b-48decf38a45f",
+  "status": "current",
+  "command": "deliver",
+  "type": "tree",
+  "input": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\tether-remote-administration\\docs\\diagrams\\src\\source-tree.json",
+  "output": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\tether-remote-administration\\docs\\diagrams\\source-tree.html",
+  "specification": {
+    "sha256": "caa43161fcf33baefc90f4eb783fc30910ad9f5c75b0a6b4443b0329c5b5c346",
+    "bytes": 7701
+  },
+  "artifact": {
+    "sha256": "3e71b3d53bfca36c5956056327dcd7f7621a7d45bb280da1be063dd66e347f8e",
+    "bytes": 845779
+  }
+}

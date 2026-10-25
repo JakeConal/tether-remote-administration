@@ -15,13 +15,13 @@ recipes for the changes you are most likely to make.
 
 | Area | Source files | Rough size |
 | --- | ---: | ---: |
-| `lib/protocol` | 10 | ~2,000 lines |
-| `lib/syscalls` | 21 | ~4,500 lines |
-| `lib/transport` | 7 | ~2,400 lines |
-| `lib/common` | 6 | ~700 lines |
-| `console` | 7 | ~1,900 lines |
-| `agent` | 3 | ~450 lines |
-| `tests` | 29 | ~9,000 lines |
+| `lib/protocol` | 10 | ~1,800 lines |
+| `lib/syscalls` | 23 | ~4,600 lines |
+| `lib/transport` | 8 | ~1,500 lines |
+| `lib/common` | 6 | ~650 lines |
+| `console` | 9 | ~1,900 lines |
+| `agent` | 3 | ~370 lines |
+| `tests` | 32 | ~10,200 lines |
 
 (File counts exclude each area's `CMakeLists.txt`.)
 
@@ -76,12 +76,13 @@ the `raw` upload).
 | `camera.hpp/.cpp` | `IFrameSource`, `ICameraCapture`, `VideoCameraCapture`, `make_video_capture_source`. |
 | `input.hpp/.cpp` | `IInputControl`, `IInputEnvironmentProbe`, `IKeyEventSource`, `IKeyCaptureSink`, `IKeyboardGuard`, `InputControl`. |
 | `app.hpp/.cpp` | `IAppLauncher`, `AppEntry`, `make_app_launcher`, `parse_desktop_exec`. |
+| `health.hpp/.cpp` | `HostReading`, `IHealthHostProbe`, `make_health_host_probe`, `HealthSnapshot`, `HealthState`, `ITelemetryControl`, `HealthTelemetryControl`, `make_health_telemetry_control`, `steady_clock_millis`. |
 
 ### `console` — the operator surface
 
 | File | What it holds |
 | --- | --- |
-| `cli.hpp/.cpp` | `CliStreams`, `IOperConsole`, the `kExit*` exit-code constants, `run_cli`. |
+| `cli.hpp/.cpp` | `CliStreams`, `IOperConsole`, the `kExit*` exit-code constants, `run_cli`, and the `monitor` render/loop path. |
 | `tcp_console.hpp/.cpp` | `TcpOperConsole` — the pump loop, `wait_for_dial`, the agent-dial budget. |
 | `audit.hpp/.cpp` | `AuditRecord`, `AuditQuery`, `AuditStore`, `load_audit_jsonl`, `classify_command_outcome`, `parse_job_event_line`. |
 
@@ -90,7 +91,7 @@ the `raw` upload).
 | File | What it holds |
 | --- | --- |
 | `main.cpp` | Config load, dispatcher wiring, the dial-out and reconnect loop. |
-| `command_handler.hpp/.cpp` | `install_commands`, `outcome_to_pieces`, `dispatch_and_reply`. |
+| `command_handler.hpp/.cpp` | `install_commands` (including the telemetry-aware overloads), `outcome_to_pieces`, `dispatch_and_reply`. |
 
 ---
 
@@ -235,7 +236,7 @@ new warning fails the CI's cleanliness expectation even if the tests pass.
 
 ### 4.1 Add a command to the closed set
 
-This touches four files. Do them in this order.
+This touches several files. Do them in this order.
 
 **Step 1 — extend the matrix** (`lib/syscalls/matrix.cpp`, `kCommandSet`):
 
@@ -252,7 +253,7 @@ in `lib/syscalls/<family>.hpp`, the implementation in
 `lib/syscalls/<family>.cpp`, a setter on `CommandDispatcher` (the existing
 ones are `set_process_control`, `set_file_system`, `set_power_control`,
 `set_screen_capture`, `set_camera_capture`, `set_input_control`,
-`set_app_launcher`), and a `family_available` branch.
+`set_app_launcher`, `set_telemetry_control`), and a `family_available` branch.
 
 **Step 3 — implement the dispatch arm** (`lib/syscalls/matrix.cpp`,
 `CommandDispatcher::dispatch`): validate the arity, call the family, and shape

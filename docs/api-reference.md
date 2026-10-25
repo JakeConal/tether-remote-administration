@@ -540,7 +540,7 @@ Anything else is ignored — **no execution, no acknowledgement**.
 
 ```cpp
 enum class Platform { Windows, Linux };
-enum class Family { Process, File, Power, Capture, Camera, App, Input };
+enum class Family { Process, File, Power, Capture, Camera, App, Input, Telemetry };
 
 struct CommandSpec {
     const char* verb;
@@ -578,6 +578,7 @@ public:
     void set_camera_capture(std::shared_ptr<ICameraCapture> impl);
     void set_input_control(std::shared_ptr<IInputControl> impl);
     void set_app_launcher(std::shared_ptr<IAppLauncher> impl);
+    void set_telemetry_control(std::shared_ptr<ITelemetryControl> impl);
     Outcome dispatch(const std::string& verb,
                      const std::vector<std::string>& args) const;
     Platform platform() const noexcept;
@@ -781,6 +782,82 @@ std::shared_ptr<IAppLauncher> make_app_launcher_with_roots(
 std::vector<std::string> parse_desktop_exec(const std::string& exec_value);
 ```
 
+### Health telemetry (`health.hpp`)
+
+```cpp
+using HealthMillis = std::int64_t;
+
+struct HostReading {
+    std::uint64_t cpu_busy;   // cumulative counter
+    std::uint64_t cpu_total;  // cumulative counter
+    std::uint64_t memory_used;
+    std::uint64_t memory_total;
+    std::uint32_t processes;
+    std::uint32_t threads;
+};
+
+class IHealthHostProbe {
+public:
+    virtual ~IHealthHostProbe() = default;
+    virtual HostReading read() = 0; // throws SyscallError("sample_unavailable", ...)
+};
+std::unique_ptr<IHealthHostProbe> make_health_host_probe();
+
+struct HealthSnapshot {
+    std::uint64_t uptime_seconds;
+    unsigned reconnects;
+    bool has_latest;
+    std::optional<double> cpu_percent;
+    std::uint64_t memory_used, memory_total;
+    std::uint32_t processes, threads;
+    HealthMillis sampled_at_ms;
+    int span_seconds;
+    std::size_t ticks;
+    std::optional<double> cpu_percent_avg, cpu_percent_max;
+    std::optional<std::uint64_t> memory_used_max;
+    double window_coverage;
+    HealthMillis sample_age_ms;
+    int interval_s;
+    std::string json() const;
+};
+
+class HealthState {
+public:
+    HealthState(int interval_s, int window_s, HealthMillis started_at);
+    int interval_s() const noexcept;
+    void note_established(HealthMillis now);
+    void tick(HealthMillis now, const HostReading& reading);
+    HealthSnapshot snapshot(HealthMillis now) const;
+    std::string snapshot_json(HealthMillis now) const;
+};
+
+HealthMillis steady_clock_millis();
+
+class ITelemetryControl {
+public:
+    virtual ~ITelemetryControl() = default;
+    virtual void sample() = 0;
+    virtual void pump() = 0;
+    virtual std::string snapshot() = 0;
+};
+class HealthTelemetryControl final : public ITelemetryControl { /* ... */ };
+std::shared_ptr<ITelemetryControl> make_health_telemetry_control(
+    HealthState& state, IHealthHostProbe& probe,
+    std::function<HealthMillis()> clock = steady_clock_millis);
+```
+
+`HealthState` is pure: it owns the rolling window and all aggregate math,
+never a clock or an OS call. `tick()` diffs cumulative CPU counters, so the
+first tick establishes the baseline and reports no CPU percentage; a counter
+reset re-baselines instead of fabricating a value. `note_established()` treats
+the first session as the anchor and each later re-registration as a reconnect.
+
+`pump()` samples at most once per `interval_s` (a late tick re-anchors rather
+than catching up), while `sample()` is the explicit form for tests and one-off
+samples. A failed probe is sticky until the next success and surfaces from
+`snapshot()` as `SyscallError("sample_unavailable", ...)`, so nothing is
+zero-filled.
+
 ---
 
 ## 5. `tether-cli`
@@ -924,7 +1001,18 @@ void install_commands(syscalls::CommandDispatcher& dispatcher,
                       protocol::AgentSession& session);
 void install_commands(syscalls::CommandDispatcher& dispatcher,
                       tether::transport::TcpAgentLink& link);
+void install_commands(syscalls::CommandDispatcher& dispatcher,
+                      protocol::AgentSession& session,
+                      std::shared_ptr<syscalls::ITelemetryControl> telemetry);
+void install_commands(syscalls::CommandDispatcher& dispatcher,
+                      tether::transport::TcpAgentLink& link,
+                      std::shared_ptr<syscalls::ITelemetryControl> telemetry);
 ```
+
+The telemetry-aware overloads bind the sampler to the dispatcher and use the
+same handler for every command. `telemetry` must wrap the dial-loop-owned
+`HealthState`, so uptime, reconnect counters, and the rolling window outlive
+individual sessions.
 
 `outcome_to_pieces` shaping rules:
 

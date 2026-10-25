@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "708dfd82-a3b8-4b4a-8631-554b4b6ad516",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\tether-remote-administration\\docs\\diagrams\\src\\system-overview.json",
+  "output": "D:\\StudentLife\\2_Workspace\\1-cpp-projects\\tether-remote-administration\\docs\\diagrams\\system-overview.html",
+  "specification": {
+    "sha256": "a0ef4c22c900beae505d84616eeb42267a9bf5a7a16bea21ab95c6a1472d493b",
+    "bytes": 7028
+  },
+  "artifact": {
+    "sha256": "f456bb13b7d4af3317452317641e74bf7e6e6f573d123e772ada9706aedb7a4e",
+    "bytes": 831143
+  }
+}

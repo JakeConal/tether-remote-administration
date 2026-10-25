@@ -146,6 +146,9 @@ Set `audit_path` in the console config to turn the trail on.
 
 - One `command` record per dispatched attempt, plus `job_event` records for
   background-job starts and stops.
+- A `monitor` invocation writes one `command: monitor` record when it ends; its
+  internal `health` polls are not separate audit records. An operator-issued
+  `exec <agent> health` is recorded like any other command.
 - **A write failure is loud.** The console reports it and exits non-zero
   rather than continuing unaudited.
 - The store re-opens existing history on construction, so previously persisted

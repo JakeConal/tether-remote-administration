@@ -7,9 +7,9 @@
     "output": "docs/diagrams/system-overview.html",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "url": "https://github.com/JakeConal/tether-remote-administration.git",
       "provider": "github",
-      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "revision": "d0f2d8343810f3b91a97e3fb66709b2cb2eeaaf6",
       "link_mode": "web"
     }
   },
@@ -74,7 +74,7 @@
       "id": "audit",
       "type": "database",
       "label": "Audit trail",
-      "sublabel": "JSONL, one record per exec attempt",
+      "sublabel": "JSONL, one record per command attempt",
       "pos": [
         200,
         350
@@ -137,7 +137,7 @@
       "id": "dispatcher",
       "type": "backend",
       "label": "Capability matrix",
-      "sublabel": "19 verbs, 7 families, 5 gates",
+      "sublabel": "20 verbs, 8 families, 5 gates",
       "pos": [
         925,
         215
@@ -158,13 +158,13 @@
       "id": "families",
       "type": "cloud",
       "label": "Capability families",
-      "sublabel": "process file power capture camera input app",
+      "sublabel": "process file power capture camera input app + telemetry",
       "pos": [
         925,
         340
       ],
       "size": [
-        178,
+        210,
         58
       ],
       "sources": [
@@ -318,9 +318,9 @@
       "dot": "rose",
       "title": "Command Surface",
       "items": [
-        "The closed set is 19 verbs over 7 families, matched exactly",
+        "The closed set is 20 verbs over 8 families, matched exactly",
         "An unsupported combination returns a structured refusal and the session stays usable",
-        "Every exec attempt is recorded when the console has an audit path configured"
+        "Every operator command attempt is recorded once when the console has an audit path configured"
       ]
     }
   ]

@@ -4,7 +4,7 @@
 
 Operator console and dial-out agent for administering machines you own — from one seat.
 
-[![CI](https://github.com/kyries-uni-projects/Networking-Project-Semester-3/actions/workflows/ci.yml/badge.svg)](https://github.com/kyries-uni-projects/Networking-Project-Semester-3/actions/workflows/ci.yml)
+[![CI](https://github.com/JakeConal/tether-remote-administration/actions/workflows/ci.yml/badge.svg)](https://github.com/JakeConal/tether-remote-administration/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue.svg?style=flat-square)]()
 [![Language](https://img.shields.io/badge/C%2B%2B-17-00599C.svg?style=flat-square&logo=cplusplus&logoColor=white)]()
@@ -23,11 +23,12 @@ tether is a two-runtime tool for administering machines you own from one operato
 
 - **Dial-out, never listen.** The agent makes one outbound TCP connection from its own config; nothing on the target listens, so tether works through NAT and firewalls without opening inbound ports.
 - **Session security.** Every session authenticates before any command traffic: an HMAC-SHA256 challenge-response over a pre-shared token provisioned at install time. The token never crosses the wire.
-- **One closed command set.** Nineteen verbs dispatch through a per-OS capability matrix into native families — Windows paths on the Windows agent, `/proc`, X11, logind and freedesktop paths on the Linux agent. An unsupported combination returns a structured refusal that names the platform and family, and the session stays usable.
+- **One closed command set.** Twenty verbs — including the `health` telemetry snapshot — dispatch through a per-OS capability matrix into native families: Windows paths on the Windows agent, `/proc`, X11, logind and freedesktop paths on the Linux agent. An unsupported combination returns a structured refusal that names the platform and family, and the session stays usable.
 - **Parameters are data.** Command arguments travel as argv-style arrays and are never re-joined into a shell line — `; | & > <` inside an argument are file names, not shell.
 - **Everything streams.** Text results stream to stdout; file results stream as chunked transfers you redirect to a file.
 - **Managed background jobs.** Camera capture and the keylogger are named jobs in one shared registry: duplicate starts are refused, stop-and-deliver hands back the accumulated capture, and the session stays responsive while a job runs.
-- **Auditability.** The console's optional JSONL audit trail records every command attempt with time, agent identity, command, arguments, seq, and outcome.
+- **Health telemetry.** The agent samples host CPU, memory, process, and thread state into a rolling window independently of the session. `exec <agent> health` returns one JSON snapshot, and `monitor` streams those snapshots alongside console-measured latency and throughput plus agent uptime and reconnect counts, even across an agent restart.
+- **Auditability.** The console's optional JSONL audit trail records every operator-issued command attempt with time, agent identity, command, arguments, seq, and outcome; a monitor invocation records itself once, not once per poll.
 
 > [!IMPORTANT]
 > **Authorized use only.** The keylogger, keyboard lock, process control, and file operations exist exclusively for administering machines **you own or are explicitly authorized to administer**. Every action is an explicit, audit-visible console command; there are no stealth features — nothing hides, nothing persists behind the operator's back — and destructive commands are refused by default until explicitly confirmed: at the console for `delete`/`shutdown`/`restart`, and at the agent for all five destructive verbs. See [docs/readiness-decisions.md](docs/readiness-decisions.md) for the policy record and [docs/security.md](docs/security.md) for the security model.
@@ -88,15 +89,18 @@ $ tether-console --config console.json exec lab-1 list
 $ tether-console --config console.json exec lab-1 screenshot > shot.png
 $ tether-console --config console.json exec lab-1 start_webcam
 $ tether-console --config console.json exec lab-1 stop_webcam > frame.png
+
+$ tether-console --config console.json exec lab-1 health
+$ tether-console --config console.json monitor lab-1 --json
 ```
 
-Console surface: `agents` (registry listing — live/stale/down), `exec <agent> <command> [args...]`, `cancel <agent> <seq>`, and `--config <path>`. Exit codes: `0` success · `1` command failure · `2` usage/unknown verb · `3` unknown agent · `4` refused confirmation.
+Console surface: `agents` (registry listing — live/stale/down), `exec <agent> <command> [args...]`, `monitor <agent> [--json]` (stream health and link stats until interrupted), `cancel <agent> <seq>`, and `--config <path>`. Exit codes: `0` success (including Ctrl-C on `monitor`) · `1` command failure · `2` usage/unknown verb · `3` unknown agent · `4` refused confirmation or a monitor whose health poll was refused.
 
 For a narrated, fully scripted end-to-end walkthrough — connection, listing, process control, a streamed screenshot, a background job lifecycle, and a refused destructive command — see [scripts/demo.md](scripts/demo.md) (and run it with `bash scripts/demo.sh ./build ./demo-run`).
 
 ## Commands
 
-All nineteen commands ride one console verb: `tether exec <agent> <command> [args...]`.
+All twenty commands ride one console verb: `tether exec <agent> <command> [args...]`.
 
 | Command | Family | Notes |
 | --- | --- | --- |
@@ -119,6 +123,7 @@ All nineteen commands ride one console verb: `tether exec <agent> <command> [arg
 | `list_app` | app | Start-menu `.lnk` (Windows) / `.desktop` entries (Linux) |
 | `start_app` | app | launched as argv — no shell |
 | `stop_app` | app | stops by pid or exact image name |
+| `health` | telemetry | one single-line JSON snapshot of host health and link counters |
 
 
 ### The confirm gate
@@ -152,10 +157,10 @@ start there for the reading paths that match what you are trying to do.
 | [docs/capture-notes.md](docs/capture-notes.md) | why the Linux capture family is own-lib X11, with the benchmark that decided it |
 | [docs/readiness-decisions.md](docs/readiness-decisions.md) | owner decisions and the allowed-use policy record |
 | [scripts/demo.md](scripts/demo.md) | the narrated end-to-end session (real binaries, real protocol) and its transcript |
-| `openspec/specs/` | the main capability specs (`secure-session`, `command-transport`, `remote-commands`, `operator-console`) |
+| `openspec/specs/` | the main capability specs (`secure-session`, `command-transport`, `remote-commands`, `operator-console`, `health-telemetry`) |
 | `openspec/changes/archive/` | the change history: proposal, design, phase-by-phase tasks, and the delta specs each change carried |
 
 ## Quality
 
-- The test suite runs as a single `ctest` invocation on both platforms and covers the protocol boundary (envelope codec, JSON payload validation, HMAC handshake against [RFC 4231](https://datatracker.ietf.org/doc/html/rfc4231) vectors, session state machine), transports (TCP loopback end-to-end, Gmail adapter behind the transport interface), and the full command surface — per-family suites plus end-to-end scenarios over the real loopback stack for every family on both OSes.
+- The test suite runs as a single `ctest` invocation on both platforms and covers the protocol boundary (envelope codec, JSON payload validation, HMAC handshake against [RFC 4231](https://datatracker.ietf.org/doc/html/rfc4231) vectors, session state machine), transports (TCP loopback end-to-end, Gmail adapter behind the transport interface), and the full command surface — per-family suites plus end-to-end scenarios over the real loopback stack for every family on both OSes, plus the health sampler, `health` over the real wire, and the monitor's restart path.
 - CI runs on every push to `main` and every PR (windows-latest + ubuntu-latest, run in parallel): per-test and per-job wall-clock guards fail a wedged run loudly instead of parking the runner, and warm dependency/compile caches keep typical runs in the minutes range.

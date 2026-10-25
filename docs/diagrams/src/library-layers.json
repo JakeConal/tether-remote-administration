@@ -7,9 +7,9 @@
     "output": "docs/diagrams/library-layers.html",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/kyrie25/Networking-Project-Semester-3.git",
+      "url": "https://github.com/JakeConal/tether-remote-administration.git",
       "provider": "github",
-      "revision": "5dd5594bcc00b4201c85e4fdcd8a8f8d707b0a13",
+      "revision": "d0f2d8343810f3b91a97e3fb66709b2cb2eeaaf6",
       "link_mode": "web"
     }
   },
@@ -123,7 +123,7 @@
       "id": "syscalls_lib",
       "type": "cloud",
       "label": "tether-syscalls",
-      "sublabel": "matrix + 7 families",
+      "sublabel": "matrix + 8 families",
       "pos": [
         480,
         175
@@ -136,7 +136,7 @@
         {
           "path": "lib/syscalls/CMakeLists.txt",
           "line": 1,
-          "end_line": 33
+          "end_line": 42
         }
       ]
     },

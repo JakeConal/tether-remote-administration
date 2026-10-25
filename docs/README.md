@@ -54,10 +54,7 @@ Every diagram is drawn as HTML and rasterised to PNG. Each one lives in
 `docs/diagrams/` as an interactive HTML artifact plus the inline PNG, and its
 authoring source is `docs/diagrams/src/<slug>.json`.
 
-| | |
-| --- | --- |
-| [diagrams/](diagrams/) | The rendered artefacts and the authoring sources. |
-| [scripts/diagrams/](../scripts/diagrams/) | The pipeline that renders and exports them: `node scripts/diagrams/build.mjs`. |
+- [diagrams/](diagrams/) — the rendered artefacts, their PNG exports, and the authoring JSON sources.
 
 ## Source of truth
 
@@ -67,6 +64,7 @@ authoring source is `docs/diagrams/src/<slug>.json`.
 | What may a command be, and where? | `lib/syscalls/matrix.cpp` (`kCommandSet`) |
 | What does the console accept? | `console/cli.cpp` |
 | What does the agent do with a command? | `agent/command_handler.cpp` → `lib/syscalls/matrix.cpp` |
+| What does `health` sample, and how is it aggregated? | `lib/syscalls/health.cpp` + `lib/syscalls/health.hpp` |
 | What may a config file contain? | `lib/common/config.cpp` |
 | What is a refusal code? | `lib/syscalls/errors.hpp` + the `Outcome` struct in `lib/syscalls/matrix.hpp` |
 
@@ -74,9 +72,8 @@ When a document and the code disagree, the code wins — and the document is a b
 
 ## Version
 
-This documentation set describes **tether 0.1.0** (protocol v2), matching the
-code state at commit `0d2354c` (the last commit before the documentation set
-was added). The build stamps `TETHER_VERSION="0.1.0"` into both binaries.
+This documentation set describes **tether 0.1.0** (protocol v2). The build
+stamps `TETHER_VERSION="0.1.0"` into both binaries.
 
 ## Authorized use
 
